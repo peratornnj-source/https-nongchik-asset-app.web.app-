@@ -40,7 +40,7 @@
   - `DataImporter.parseJSON(text: string) -> Array<object>`
   - `DataImporter.mergeAssets(existingAssets: Array<object>, importedAssets: Array<object>, mode: 'merge'|'replace') -> { merged: Array<object>, addedCount: number, updatedCount: number }`
 
-- [ ] **Step 1: Write failing unit test for `data-importer.js`**
+- [x] **Step 1: Write failing unit test for `data-importer.js`**
 
 Write `tests/test-data-importer.test.js`:
 ```javascript
@@ -115,12 +115,12 @@ test('mergeAssets in replace mode completely overwrites existing dataset', () =>
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `node --test tests/test-data-importer.test.js`
 Expected: FAIL with module not found.
 
-- [ ] **Step 3: Implement `data-importer.js`**
+- [x] **Step 3: Implement `data-importer.js`**
 
 Implement `data-importer.js` with:
 - `detectColumns(headers)` using regular expressions matching common Thai & English field aliases
@@ -130,12 +130,12 @@ Implement `data-importer.js` with:
 - `mergeAssets(current, incoming, mode)`
 - SheetJS integration helper `parseWorkbook(workbook)` to extract rows from the first sheet.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `node --test tests/test-data-importer.test.js`
 Expected: PASS all tests.
 
-- [ ] **Step 5: Commit Task 1**
+- [x] **Step 5: Commit Task 1**
 
 ```bash
 git add data-importer.js tests/test-data-importer.test.js
@@ -149,11 +149,11 @@ git commit -m "feat: add data-importer module with smart column mapping and test
 **Files:**
 - Modify: `index.html`
 
-- [ ] **Step 1: Include `data-importer.js` module in `index.html`**
+- [x] **Step 1: Include `data-importer.js` module in `index.html`**
 
 Load `data-importer.js` alongside existing modules.
 
-- [ ] **Step 2: Add `#importPreviewModal` to `index.html`**
+- [x] **Step 2: Add `#importPreviewModal` to `index.html`**
 
 Create modal containing:
 - File metadata (file name, size, total rows detected)
@@ -164,7 +164,7 @@ Create modal containing:
   - 🔘 **แทนที่ฐานข้อมูลทั้งหมด (Replace All)**
 - Action Buttons: "ยืนยันการนำเข้าข้อมูล" and "ยกเลิก"
 
-- [ ] **Step 3: Update Import Button and File Change Handler**
+- [x] **Step 3: Update Import Button and File Change Handler**
 
 - Change `#csvFileInput` to `#databaseFileInput` with `accept=".xlsx,.xls,.csv,.tsv,.json"`
 - Update button label to "นำเข้าข้อมูล (Excel / CSV / JSON)"
@@ -179,11 +179,11 @@ Create modal containing:
   - Re-renders tables and KPIs
   - If Firebase connected, offers to upload/sync to Firestore.
 
-- [ ] **Step 4: Run test suite**
+- [x] **Step 4: Run test suite**
 
 Run `npm test` and verify syntax.
 
-- [ ] **Step 5: Commit Task 2**
+- [x] **Step 5: Commit Task 2**
 
 ```bash
 git add index.html
@@ -194,10 +194,10 @@ git commit -m "feat: integrate multi-format spreadsheet import UI and preview mo
 
 ### Task 3: Deploy to Firebase Hosting and Verify in Browser
 
-- [ ] **Step 1: Deploy to Firebase Hosting**
+- [x] **Step 1: Deploy to Firebase Hosting**
 
 Run `firebase deploy --only hosting --project nongchik-asset-app`
 
-- [ ] **Step 2: Smoke test live site with Browser Subagent**
+- [x] **Step 2: Smoke test live site with Browser Subagent**
 
 Verify the live site loads and the new "นำเข้าข้อมูล (Excel / CSV / JSON)" button is active.
