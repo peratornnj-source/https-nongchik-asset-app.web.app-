@@ -11,6 +11,11 @@
   <!-- QR Code Generator & Scanner -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="https://unpkg.com/html5-qrcode"></script>
+  <!-- Firebase 10.x Compat SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+  <!-- SheetJS (XLSX) CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Google Fonts: Sarabun -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -26,7 +31,9 @@
     @media print {
       body * { visibility: hidden; }
       #batchPrintArea, #batchPrintArea * { visibility: visible; }
-      #batchPrintArea { position: absolute; left: 0; top: 0; width: 100%; display: block !important; }
+      #batchPrintArea { position: absolute; left: 0; top: 0; width: 100%; }
+      #reportPrintArea, #reportPrintArea * { visibility: visible; }
+      #reportPrintArea { position: absolute; left: 0; top: 0; width: 100%; display: block !important; }
       .no-print { display: none !important; }
     }
   </style>
@@ -53,10 +60,10 @@
 
         <!-- Action Buttons -->
         <div class="flex items-center space-x-2">
-          <!-- Cloud Sync Button -->
-          <button onclick="openFirebaseModal()" title="เชื่อมต่อ Firebase" class="hidden md:flex items-center gap-1.5 bg-teal-900/60 hover:bg-teal-900 text-teal-200 border border-teal-500/30 px-3 py-1.5 rounded-lg text-xs transition">
-            <i data-lucide="cloud" class="w-4 h-4 text-amber-400"></i>
-            <span>Firebase Sync</span>
+          <!-- Cloud Sync Button & Status Badge -->
+          <button onclick="openFirebaseModal()" title="เชื่อมต่อ Firebase" class="flex items-center gap-2 bg-teal-900/60 hover:bg-teal-900 text-teal-200 border border-teal-500/30 px-3 py-1.5 rounded-lg text-xs transition">
+            <span id="cloudStatusDot" class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>
+            <span id="cloudStatusText">LocalStorage</span>
           </button>
 
           <!-- Scan Button -->
@@ -246,50 +253,187 @@
 
     <!-- ================= ANNUAL AUDIT MODE VIEW ================= -->
     <div id="auditView" class="hidden bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-6">
+      <!-- Round Header Banner -->
       <div class="border-b pb-4 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h2 class="text-lg font-bold text-indigo-900 flex items-center gap-2">
-            <i data-lucide="clipboard-check" class="w-5 h-5 text-indigo-600"></i>
-            โหมดตรวจนับพัสดุประจำปี (Annual Stocktaking Audit)
-          </h2>
-          <p class="text-xs text-slate-500">เลือกแผนกเป้าหมาย แล้วใช้กล้องมือถือสแกน QR Code ตรวจนับต่อเนื่องได้ทันที</p>
+          <div class="flex items-center gap-2">
+            <h2 class="text-lg font-bold text-indigo-950 flex items-center gap-2">
+              <i data-lucide="clipboard-check" class="w-5 h-5 text-indigo-600"></i>
+              โหมดตรวจนับพัสดุประจำปี (Annual Stocktaking Audit)
+            </h2>
+            <span id="auditStatusBadge" class="text-xs px-2.5 py-0.5 rounded-full font-bold bg-amber-100 text-amber-800 border border-amber-300">
+              กำลังดำเนินการ (In Progress)
+            </span>
+          </div>
+          <p class="text-xs text-slate-500 mt-1 flex flex-wrap items-center gap-3">
+            <span>📅 ปีงบประมาณ: <strong id="auditFiscalYearDisplay" class="text-indigo-800">2569</strong></span>
+            <span>📜 คำสั่ง: <strong id="auditOrderDisplay" class="text-slate-700">-</strong></span>
+            <span>👥 กรรมการ: <span id="auditCommitteeDisplay" class="text-slate-600">-</span></span>
+          </p>
         </div>
-        <div class="flex items-center gap-3">
-          <label class="text-xs font-semibold text-slate-700">แผนกที่กำลังตรวจ:</label>
-          <select id="auditDeptSelect" onchange="initAuditSession()" class="py-1.5 px-3 border border-indigo-300 rounded-lg text-sm bg-indigo-50 font-medium">
-            <option value="">-- เลือกแผนกที่ต้องการตรวจนับ --</option>
-          </select>
+
+        <div class="flex items-center gap-2">
+          <button onclick="openAuditSettingsModal()" class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold border transition">
+            <i data-lucide="settings" class="w-4 h-4 text-slate-500"></i>
+            ตั้งค่ารอบ/กรรมการ
+          </button>
+          <button onclick="openReportPreviewModal()" class="flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow transition">
+            <i data-lucide="file-text" class="w-4 h-4"></i>
+            ออกรายงานราชการ (ข้อ 213)
+          </button>
+          <button onclick="finalizeAuditAndApplyMaster()" id="btnFinalizeAudit" class="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 rounded-lg text-xs font-semibold transition">
+            <i data-lucide="lock" class="w-4 h-4 text-rose-600"></i>
+            ปิดรอบและปรับปรุงบัญชีหลัก
+          </button>
         </div>
       </div>
 
-      <!-- Audit Progress Indicator -->
-      <div id="auditProgressBox" class="hidden space-y-4">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div class="bg-emerald-50 border border-emerald-200 p-4 rounded-xl text-center">
-            <p class="text-xs text-emerald-600 font-semibold">ตรวจพบถูกต้อง (ชิ้น)</p>
-            <p id="auditFoundCount" class="text-2xl font-bold text-emerald-800 mt-1">0</p>
+      <!-- Live Audit Progress Summary -->
+      <div class="space-y-3">
+        <div class="flex justify-between items-center text-xs">
+          <span class="font-bold text-slate-700 flex items-center gap-1.5">
+            <i data-lucide="activity" class="w-4 h-4 text-emerald-600"></i>
+            ความคืบหน้าการตรวจนับทั้งโรงพยาบาล:
+            <span id="auditProgressText" class="text-indigo-700 font-bold">0 / 0 รายการ (0%)</span>
+          </span>
+          <span class="text-slate-500">มูลค่ารวมตรวจนับแล้ว: <strong id="auditScannedValue" class="text-emerald-700 font-mono">0 ฿</strong></span>
+        </div>
+        <div class="w-full bg-slate-100 h-3 rounded-full overflow-hidden border border-slate-200">
+          <div id="auditProgressBar" class="bg-gradient-to-r from-teal-500 to-indigo-600 h-full rounded-full transition-all duration-300" style="width: 0%"></div>
+        </div>
+
+        <!-- 4 Condition Stat Cards -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2">
+          <div class="bg-emerald-50 border border-emerald-200 p-3 rounded-xl flex items-center justify-between">
+            <div>
+              <p class="text-xs font-semibold text-emerald-700">1. ปกติใช้งานได้</p>
+              <p id="statAuditNormal" class="text-xl font-bold text-emerald-900 mt-0.5">0</p>
+            </div>
+            <i data-lucide="check-circle-2" class="w-6 h-6 text-emerald-500"></i>
           </div>
-          <div class="bg-amber-50 border border-amber-200 p-4 rounded-xl text-center">
-            <p class="text-xs text-amber-600 font-semibold">พบแต่ผิดตึก/ย้ายมา (ชิ้น)</p>
-            <p id="auditMisplacedCount" class="text-2xl font-bold text-amber-800 mt-1">0</p>
+          <div class="bg-amber-50 border border-amber-200 p-3 rounded-xl flex items-center justify-between">
+            <div>
+              <p class="text-xs font-semibold text-amber-700">2. ชำรุดซ่อมได้</p>
+              <p id="statAuditDamaged" class="text-xl font-bold text-amber-900 mt-0.5">0</p>
+            </div>
+            <i data-lucide="wrench" class="w-6 h-6 text-amber-500"></i>
           </div>
-          <div class="bg-rose-50 border border-rose-200 p-4 rounded-xl text-center">
-            <p class="text-xs text-rose-600 font-semibold">ยังตรวจไม่พบ (ชิ้น)</p>
-            <p id="auditMissingCount" class="text-2xl font-bold text-rose-800 mt-1">0</p>
+          <div class="bg-rose-50 border border-rose-200 p-3 rounded-xl flex items-center justify-between">
+            <div>
+              <p class="text-xs font-semibold text-rose-700">3. เสนอขอจำหน่าย</p>
+              <p id="statAuditDeteriorated" class="text-xl font-bold text-rose-900 mt-0.5">0</p>
+            </div>
+            <i data-lucide="alert-octagon" class="w-6 h-6 text-rose-500"></i>
+          </div>
+          <div class="bg-purple-50 border border-purple-200 p-3 rounded-xl flex items-center justify-between">
+            <div>
+              <p class="text-xs font-semibold text-purple-700">4. สูญไป/หาไม่พบ</p>
+              <p id="statAuditLost" class="text-xl font-bold text-purple-900 mt-0.5">0</p>
+            </div>
+            <i data-lucide="help-circle" class="w-6 h-6 text-purple-500"></i>
+          </div>
+        </div>
+      </div>
+
+      <!-- Fast Scan Control Box -->
+      <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <button onclick="openScannerModal(true)" class="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md transition text-sm">
+              <i data-lucide="camera" class="w-5 h-5"></i>
+              เปิดกล้องสแกนตรวจนับต่อเนื่อง
+            </button>
+            <label class="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
+              <input type="checkbox" id="auditFastScanToggle" checked class="rounded text-teal-600 focus:ring-teal-500">
+              <span>โหมดสแกนไว (Fast Continuous Scan - เสียงปี๊บและบันทึกปกติทันที)</span>
+            </label>
+          </div>
+          <div class="flex items-center gap-2 flex-grow max-w-sm">
+            <div class="relative w-full">
+              <i data-lucide="scan" class="w-4 h-4 absolute left-3 top-2.5 text-slate-400"></i>
+              <input type="text" id="auditQuickInput" onkeydown="handleQuickAuditKey(event)" placeholder="พิมพ์/ยิงบาร์โค้ดแล้วกด Enter..."
+                class="w-full pl-9 pr-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+            </div>
+            <button onclick="submitQuickAuditInput()" class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-lg border border-indigo-200 transition">
+              ตรวจ
+            </button>
           </div>
         </div>
 
-        <div class="flex justify-center pt-2">
-          <button onclick="openScannerModal(true)" class="flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg transition">
-            <i data-lucide="camera" class="w-5 h-5"></i>
-            เปิดกล้องสแกนตรวจนับต่อเนื่อง
+        <!-- Latest Scanned Card Banner -->
+        <div id="latestScannedBox" class="hidden p-3 bg-white border border-indigo-200 rounded-lg flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <span class="p-2 bg-emerald-100 text-emerald-800 rounded-lg"><i data-lucide="check" class="w-5 h-5"></i></span>
+            <div>
+              <p class="text-xs font-bold text-slate-800">
+                สแกนล่าสุด: <span id="latestScannedName" class="text-indigo-900">-</span>
+              </p>
+              <p class="text-[11px] text-slate-500">
+                เลข: <span id="latestScannedCode" class="font-mono font-semibold">-</span> | 
+                แผนกเดิม: <span id="latestScannedDept">-</span> | 
+                สภาพ: <span id="latestScannedConditionBadge" class="font-bold text-emerald-700">ใช้งานปกติ</span>
+              </p>
+            </div>
+          </div>
+          <button onclick="openChangeConditionModalForLatest()" class="text-xs font-bold px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg transition">
+            ✏️ เปลี่ยนสภาพ / บันทึกชำรุด
+          </button>
+        </div>
+      </div>
+
+      <!-- Audit Subtabs: Feed vs Reconciliation -->
+      <div>
+        <div class="flex border-b border-slate-200 gap-4 text-xs font-semibold">
+          <button onclick="switchAuditSubtab('feed')" id="subtabBtn-feed" class="pb-2 border-b-2 border-indigo-600 text-indigo-700">
+            📡 บันทึกการสแกนสด (Live Scan Feed)
+          </button>
+          <button onclick="switchAuditSubtab('reconcile')" id="subtabBtn-reconcile" class="pb-2 text-slate-500 hover:text-slate-800">
+            ⚖️ รายการตกสำรวจ / ยังไม่ได้ตรวจนับ (Reconciliation) <span id="pendingBadgeCount" class="bg-rose-100 text-rose-800 px-1.5 py-0.5 rounded-full text-[10px]">0</span>
           </button>
         </div>
 
-        <div class="mt-4 border rounded-xl overflow-hidden">
-          <div class="bg-slate-100 p-3 text-xs font-bold text-slate-700 border-b">บันทึกผลการสแกนตรวจนับประจำห้อง/แผนก</div>
-          <div id="auditScanLogs" class="divide-y divide-slate-100 max-h-72 overflow-y-auto text-xs p-2 space-y-1">
-            <p class="text-slate-400 text-center py-4">ยังไม่มีการสแกนในรอบนี้</p>
+        <!-- Subtab Content: Live Scan Feed -->
+        <div id="auditSubtab-feed" class="pt-3">
+          <div class="border rounded-xl overflow-hidden bg-slate-50">
+            <div class="p-2.5 bg-slate-100 text-xs font-bold text-slate-700 border-b flex justify-between items-center">
+              <span>รายการที่ตรวจนับแล้วในรอบนี้ (<span id="auditFeedTotalCount">0</span> รายการ)</span>
+              <span class="text-[11px] text-slate-500">คลิกที่รายการเพื่อแก้ไขสภาพหรือระบุความเห็น</span>
+            </div>
+            <div id="auditScanLogs" class="divide-y divide-slate-200 max-h-80 overflow-y-auto text-xs p-2 space-y-1 bg-white">
+              <p class="text-slate-400 text-center py-6">ยังไม่มีการสแกนในรอบนี้</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Subtab Content: Reconciliation -->
+        <div id="auditSubtab-reconcile" class="hidden pt-3 space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-2 bg-slate-50 p-2.5 rounded-lg border">
+            <div class="flex items-center gap-2 text-xs">
+              <label class="font-semibold text-slate-700">กรองแผนก:</label>
+              <select id="reconcileDeptFilter" onchange="renderReconciliationList()" class="py-1 px-2.5 border rounded-lg bg-white text-xs">
+                <option value="">-- ทุกแผนก --</option>
+              </select>
+            </div>
+            <p class="text-xs text-slate-500">
+              * ของที่ยังไม่ได้สแกนถือเป็น <strong>"รอการตรวจนับ"</strong> หากค้นหาครบทุกตึกแล้วไม่พบ ให้กรรมการกด <em>"ระบุเป็นสูญไป"</em>
+            </p>
+          </div>
+
+          <div class="border rounded-xl overflow-hidden bg-white">
+            <div class="max-h-80 overflow-y-auto">
+              <table class="min-w-full divide-y divide-slate-200 text-left text-xs">
+                <thead class="bg-slate-100 text-slate-600 font-semibold sticky top-0">
+                  <tr>
+                    <th class="py-2.5 px-3">เลขครุภัณฑ์</th>
+                    <th class="py-2.5 px-3">ชื่อรายการครุภัณฑ์</th>
+                    <th class="py-2.5 px-3">แผนกที่ครองครอง</th>
+                    <th class="py-2.5 px-3">ราคา (บาท)</th>
+                    <th class="py-2.5 px-3 text-center">จัดการ</th>
+                  </tr>
+                </thead>
+                <tbody id="reconcileTableBody" class="divide-y divide-slate-100"></tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
@@ -585,6 +729,145 @@
     </div>
   </div>
 
+  <!-- ================= REPORT PREVIEW MODAL (CLAUSE 213) ================= -->
+  <div id="reportPreviewModal" class="fixed inset-0 bg-slate-900/80 z-50 hidden flex items-center justify-center p-2 sm:p-4 no-print">
+    <div class="bg-white rounded-2xl max-w-5xl w-full h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+      <!-- Modal Header -->
+      <div class="p-4 bg-slate-900 text-white flex flex-wrap items-center justify-between gap-3 border-b border-slate-800">
+        <div class="flex items-center gap-2">
+          <div class="p-2 bg-indigo-600 rounded-lg"><i data-lucide="file-text" class="w-5 h-5 text-white"></i></div>
+          <div>
+            <h3 class="font-bold text-sm">แบบรายงานผลการตรวจสอบพัสดุประจำปี (ระเบียบฯ ข้อ 213)</h3>
+            <p class="text-[11px] text-slate-400">ตัวอย่างเอกสารทางการมาตรฐาน A4 พร้อมบัญชีแนบรายการชำรุด/สูญไป</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="printGovernmentReport()" class="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow transition">
+            <i data-lucide="printer" class="w-4 h-4"></i>
+            พิมพ์ A4 / บันทึก PDF
+          </button>
+          <button onclick="exportGovernmentReportExcel()" class="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow transition">
+            <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
+            ส่งออก Excel (.xlsx)
+          </button>
+          <button onclick="closeModal('reportPreviewModal')" class="p-1.5 text-slate-400 hover:text-white rounded-lg">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+      </div>
+      <!-- Modal Body (Scrollable A4 Canvas) -->
+      <div class="flex-grow overflow-y-auto p-4 sm:p-8 bg-slate-200">
+        <div id="reportPreviewContent" class="shadow-xl mx-auto"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= AUDIT CONDITION / NOTES MODAL ================= -->
+  <div id="auditConditionModal" class="fixed inset-0 bg-slate-900/70 z-50 hidden flex items-center justify-center p-4 no-print">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center border-b pb-2">
+        <h3 class="font-bold text-slate-800 flex items-center gap-2 text-indigo-900">
+          <i data-lucide="clipboard-edit" class="w-5 h-5 text-indigo-600"></i> บันทึกสภาพความชำรุด / ข้อสังเกต
+        </h3>
+        <button onclick="closeModal('auditConditionModal')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+
+      <div class="text-xs space-y-3">
+        <div class="p-2.5 bg-slate-50 border rounded-lg">
+          <p class="font-bold text-slate-800" id="conditionModalAssetName">-</p>
+          <p class="text-slate-500 font-mono mt-0.5" id="conditionModalAssetCode">-</p>
+        </div>
+
+        <div>
+          <label class="font-bold text-slate-700">สภาพของครุภัณฑ์ตามระเบียบ:</label>
+          <select id="conditionModalSelect" class="w-full mt-1 p-2 border rounded-lg text-xs bg-white font-medium">
+            <option value="normal">1. ครบถ้วน ใช้งานได้ตามปกติ</option>
+            <option value="damaged_repairable">2. ชำรุด สามารถซ่อมแซมได้ (เสนอส่งซ่อม)</option>
+            <option value="deteriorated_unusable">3. ชำรุด/เสื่อมสภาพไม่คุ้มค่าซ่อม (เสนอขอจำหน่าย)</option>
+            <option value="lost">4. สูญไป/หาตัวไม่พบ (เสนอดำเนินการสืบหา/จำหน่าย)</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="font-bold text-slate-700">อาการชำรุด / ข้อสังเกตของคณะกรรมการ:</label>
+          <textarea id="conditionModalNotes" rows="3" class="w-full mt-1 p-2 border rounded-lg text-xs" placeholder="เช่น แผงวงจรไหม้, อุปกรณ์เสริมหาย, ปริ้นเตอร์ดึงกระดาษติดบ่อย..."></textarea>
+        </div>
+      </div>
+
+      <button onclick="saveAuditConditionModal()" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs shadow transition">
+        บันทึกสภาพครุภัณฑ์
+      </button>
+    </div>
+  </div>
+
+  <!-- ================= AUDIT SETTINGS / COMMITTEE MODAL ================= -->
+  <div id="auditSettingsModal" class="fixed inset-0 bg-slate-900/70 z-50 hidden flex items-center justify-center p-4 no-print">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-center border-b pb-2">
+        <h3 class="font-bold text-slate-800 flex items-center gap-2 text-indigo-900">
+          <i data-lucide="settings" class="w-5 h-5 text-indigo-600"></i> ตั้งค่ารอบการตรวจนับและคณะกรรมการ
+        </h3>
+        <button onclick="closeModal('auditSettingsModal')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+
+      <div class="text-xs space-y-3">
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="font-bold text-slate-700">ปีงบประมาณ พ.ศ.:</label>
+            <input type="text" id="settingFiscalYear" class="w-full mt-1 p-2 border rounded-lg font-bold" value="2569">
+          </div>
+          <div>
+            <label class="font-bold text-slate-700">ลงวันที่คำสั่ง:</label>
+            <input type="text" id="settingOrderDate" class="w-full mt-1 p-2 border rounded-lg" value="15 กันยายน 2569">
+          </div>
+        </div>
+
+        <div>
+          <label class="font-bold text-slate-700">เลขที่คำสั่งแต่งตั้งกรรมการ:</label>
+          <input type="text" id="settingOrderNo" class="w-full mt-1 p-2 border rounded-lg" value="คำสั่งโรงพยาบาลหนองจิก ที่ 125/2569">
+        </div>
+
+        <div class="pt-2 border-t">
+          <p class="font-bold text-slate-800 mb-2">รายชื่อคณะกรรมการตรวจสอบพัสดุประจำปี:</p>
+          <div class="space-y-2">
+            <div class="p-2.5 bg-slate-50 border rounded-lg space-y-1">
+              <span class="font-bold text-teal-800">1. ประธานกรรมการ</span>
+              <input type="text" id="comm1Name" class="w-full p-1.5 border rounded bg-white text-xs" value="นายแพทย์วิชาญ รักษาดี" placeholder="ชื่อ-สกุล">
+              <input type="text" id="comm1Pos" class="w-full p-1.5 border rounded bg-white text-xs" value="นายแพทย์ชำนาญการพิเศษ" placeholder="ตำแหน่ง">
+            </div>
+            <div class="p-2.5 bg-slate-50 border rounded-lg space-y-1">
+              <span class="font-bold text-teal-800">2. กรรมการ</span>
+              <input type="text" id="comm2Name" class="w-full p-1.5 border rounded bg-white text-xs" value="นางสาวมาลี มีสุข" placeholder="ชื่อ-สกุล">
+              <input type="text" id="comm2Pos" class="w-full p-1.5 border rounded bg-white text-xs" value="พยาบาลวิชาชีพชำนาญการ" placeholder="ตำแหน่ง">
+            </div>
+            <div class="p-2.5 bg-slate-50 border rounded-lg space-y-1">
+              <span class="font-bold text-teal-800">3. กรรมการและเลขานุการ</span>
+              <input type="text" id="comm3Name" class="w-full p-1.5 border rounded bg-white text-xs" value="นายสมศักดิ์ พัสดุงาม" placeholder="ชื่อ-สกุล">
+              <input type="text" id="comm3Pos" class="w-full p-1.5 border rounded bg-white text-xs" value="เจ้าพนักงานพัสดุปฏิบัติงาน" placeholder="ตำแหน่ง">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button onclick="saveAuditSettings()" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs shadow transition">
+        บันทึกการตั้งค่ารอบตรวจนับ
+      </button>
+    </div>
+  </div>
+
+  <!-- Hidden Container for Printing Report -->
+  <div id="reportPrintArea" style="display: none;"></div>
+
+  <!-- Modules for Firebase, Audit Engine, and Government Report -->
+  <script type="module">
+    import { FirebaseBridge } from './firebase-bridge.js';
+    import { AuditEngine } from './audit-engine.js';
+    import { ReportGenerator } from './report-generator.js';
+    window.FirebaseBridge = FirebaseBridge;
+    window.AuditEngine = AuditEngine;
+    window.ReportGenerator = ReportGenerator;
+  </script>
+
   <!-- ================= JAVASCRIPT LOGIC WITH EMBEDDED REAL DATA ================= -->
   <script>
     // ฐานข้อมูลครุภัณฑ์จริงของโรงพยาบาลหนองจิก (ฝังในตัว 100% ไม่ต้องพึ่งพาไฟล์ภายนอก)
@@ -705,7 +988,36 @@
     let assetTransfers = JSON.parse(localStorage.getItem('nongchik_transfers')) || [];
     let html5QrScanner = null;
     let isAuditScanMode = false;
-    let auditSession = { dept: '', found: new Set(), misplaced: new Set() };
+    let currentAuditRound = null;
+    let selectedAuditAssetCode = null;
+    let activeFiscalYear = '2569';
+    let latestStatutoryReportData = null;
+
+    function playBeepSound(type = 'success') {
+      try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) return;
+        const ctx = new AudioContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        if (type === 'success') {
+          osc.frequency.setValueAtTime(880, ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(1760, ctx.currentTime + 0.12);
+          gain.gain.setValueAtTime(0.2, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.12);
+          osc.start(ctx.currentTime);
+          osc.stop(ctx.currentTime + 0.12);
+        } else {
+          osc.frequency.setValueAtTime(300, ctx.currentTime);
+          gain.gain.setValueAtTime(0.3, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
+          osc.start(ctx.currentTime);
+          osc.stop(ctx.currentTime + 0.25);
+        }
+      } catch (e) {}
+    }
 
     const hospitalDepts = [
       "ANC-ฝากครรภ์", "ARV-งานยาเสพติด", "ART-งานพัสดุ", "AMB-งานยานพาหนะ", 
@@ -724,15 +1036,15 @@
       const deptFilter = document.getElementById('deptFilter');
       const regDept = document.getElementById('regDept');
       const transferToDept = document.getElementById('transferToDept');
-      const auditDeptSelect = document.getElementById('auditDeptSelect');
+      const reconcileDeptFilter = document.getElementById('reconcileDeptFilter');
       const batchPrintDeptSelect = document.getElementById('batchPrintDeptSelect');
 
       hospitalDepts.forEach(d => {
-        deptFilter.innerHTML += `<option value="${d}">${d}</option>`;
-        regDept.innerHTML += `<option value="${d}">${d}</option>`;
-        transferToDept.innerHTML += `<option value="${d}">${d}</option>`;
-        auditDeptSelect.innerHTML += `<option value="${d}">${d}</option>`;
-        batchPrintDeptSelect.innerHTML += `<option value="${d}">${d}</option>`;
+        if (deptFilter) deptFilter.innerHTML += `<option value="${d}">${d}</option>`;
+        if (regDept) regDept.innerHTML += `<option value="${d}">${d}</option>`;
+        if (transferToDept) transferToDept.innerHTML += `<option value="${d}">${d}</option>`;
+        if (reconcileDeptFilter) reconcileDeptFilter.innerHTML += `<option value="${d}">${d}</option>`;
+        if (batchPrintDeptSelect) batchPrintDeptSelect.innerHTML += `<option value="${d}">${d}</option>`;
       });
 
       // Load cached or embedded
@@ -930,6 +1242,7 @@
 
       assetTransfers.unshift(transferRecord);
       localStorage.setItem('nongchik_transfers', JSON.stringify(assetTransfers));
+      if (window.FirebaseBridge) window.FirebaseBridge.saveTransfer(transferRecord);
 
       if (type === 'โอนย้ายสิทธิ์ถาวร') {
         selectedAsset.dept = toDept;
@@ -1024,44 +1337,407 @@
       closeModal('scannerModal');
     }
 
-    // Annual Stock Audit
-    function initAuditSession() {
-      const dept = document.getElementById('auditDeptSelect').value;
-      if (!dept) {
-        document.getElementById('auditProgressBox').classList.add('hidden');
-        return;
+    // ================= ANNUAL STOCK AUDIT ENGINE =================
+    function initAuditRound() {
+      if (!window.AuditEngine) return;
+      const saved = localStorage.getItem(`nongchik_audit_${activeFiscalYear}`);
+      if (saved) {
+        try {
+          currentAuditRound = JSON.parse(saved);
+        } catch {}
       }
-      auditSession = { dept: dept, found: new Set(), misplaced: new Set() };
-      document.getElementById('auditProgressBox').classList.remove('hidden');
-      updateAuditUI();
+
+      if (!currentAuditRound) {
+        currentAuditRound = window.AuditEngine.createRound(
+          activeFiscalYear,
+          'คำสั่งโรงพยาบาลหนองจิก ที่ 125/2569',
+          '15 กันยายน 2569',
+          [
+            { name: 'นายแพทย์วิชาญ รักษาดี', position: 'นายแพทย์ชำนาญการพิเศษ', role: 'ประธานกรรมการ' },
+            { name: 'นางสาวมาลี มีสุข', position: 'พยาบาลวิชาชีพชำนาญการ', role: 'กรรมการ' },
+            { name: 'นายสมศักดิ์ พัสดุงาม', position: 'เจ้าพนักงานพัสดุปฏิบัติงาน', role: 'กรรมการและเลขานุการ' }
+          ]
+        );
+        localStorage.setItem(`nongchik_audit_${activeFiscalYear}`, JSON.stringify(currentAuditRound));
+      }
+
+      renderAuditUI();
+    }
+
+    function renderAuditUI() {
+      if (!currentAuditRound || !window.AuditEngine) return;
+
+      const activeAssets = window.AuditEngine.filterActiveAssets(assetsData);
+      const summary = window.AuditEngine.computeSummary(currentAuditRound, activeAssets);
+
+      // Banner details
+      document.getElementById('auditFiscalYearDisplay').innerText = currentAuditRound.fiscalYear || activeFiscalYear;
+      document.getElementById('auditOrderDisplay').innerText = currentAuditRound.orderNo || '-';
+      const commStr = (currentAuditRound.committee || []).map(c => c.name).join(', ') || '-';
+      document.getElementById('auditCommitteeDisplay').innerText = commStr;
+
+      const badge = document.getElementById('auditStatusBadge');
+      const btnFinalize = document.getElementById('btnFinalizeAudit');
+      if (currentAuditRound.status === 'finalized') {
+        badge.className = "text-xs px-2.5 py-0.5 rounded-full font-bold bg-slate-200 text-slate-800 border border-slate-300";
+        badge.innerText = "ปิดรอบแล้ว (Finalized & Locked)";
+        if (btnFinalize) btnFinalize.classList.add('hidden');
+      } else {
+        badge.className = "text-xs px-2.5 py-0.5 rounded-full font-bold bg-amber-100 text-amber-800 border border-amber-300";
+        badge.innerText = "กำลังดำเนินการ (In Progress)";
+        if (btnFinalize) btnFinalize.classList.remove('hidden');
+      }
+
+      // Progress summary
+      document.getElementById('auditProgressText').innerText = `${summary.scannedCount.toLocaleString()} / ${summary.totalCount.toLocaleString()} รายการ (${summary.progressPercent}%)`;
+      const scannedTotalValue = summary.normalValue + summary.damagedRepairableValue + summary.deterioratedUnusableValue;
+      document.getElementById('auditScannedValue').innerText = `${scannedTotalValue.toLocaleString()} ฿`;
+      document.getElementById('auditProgressBar').style.width = `${summary.progressPercent}%`;
+
+      // 4 condition stat cards
+      document.getElementById('statAuditNormal').innerText = summary.normalCount.toLocaleString();
+      document.getElementById('statAuditDamaged').innerText = summary.damagedRepairableCount.toLocaleString();
+      document.getElementById('statAuditDeteriorated').innerText = summary.deterioratedUnusableCount.toLocaleString();
+      document.getElementById('statAuditLost').innerText = summary.lostCount.toLocaleString();
+      document.getElementById('pendingBadgeCount').innerText = summary.pendingCount.toLocaleString();
+
+      // Render feed logs
+      renderAuditScanLogs();
+      // Render reconciliation
+      renderReconciliationList();
+      if (window.lucide) lucide.createIcons();
     }
 
     function handleAuditScannedAsset(asset, rawText) {
-      const logs = document.getElementById('auditScanLogs');
-      if (!asset) {
-        logs.innerHTML = `<div class="p-2 bg-rose-50 text-rose-700 rounded mb-1">❌ ไม่พบรหัสในฐานข้อมูล: ${rawText}</div>` + logs.innerHTML;
+      if (!currentAuditRound) initAuditRound();
+      if (currentAuditRound && currentAuditRound.status === 'finalized') {
+        alert("รอบการตรวจนับนี้ถูกปิดรอบและล็อกแล้ว ไม่สามารถสแกนเพิ่มเติมได้");
         return;
       }
 
-      if (asset.dept === auditSession.dept) {
-        auditSession.found.add(asset.code);
-        logs.innerHTML = `<div class="p-2 bg-emerald-50 text-emerald-800 rounded mb-1">✅ <strong>ถูกต้อง:</strong> ${asset.name} (${asset.code})</div>` + logs.innerHTML;
-      } else {
-        auditSession.misplaced.add(asset.code);
-        logs.innerHTML = `<div class="p-2 bg-amber-50 text-amber-800 rounded mb-1">⚠️ <strong>พบแต่ผิดตึก:</strong> ${asset.name} (${asset.code}) สังกัดเดิมคือ [${asset.dept}]</div>` + logs.innerHTML;
+      if (!asset) {
+        playBeepSound('error');
+        alert("ไม่พบข้อมูลครุภัณฑ์รหัส: " + rawText);
+        return;
       }
-      updateAuditUI();
+
+      const isFastScan = document.getElementById('auditFastScanToggle')?.checked ?? true;
+      const auditor = currentUser ? `${currentUser.name} (${currentUser.dept.split('-')[0]})` : 'เจ้าหน้าที่ตรวจนับ';
+
+      const scanResult = window.AuditEngine.recordScan(currentAuditRound, asset.code, auditor, 'normal');
+      playBeepSound('success');
+
+      // Show latest scanned card
+      showLatestScannedCard(asset, scanResult.item);
+
+      // Save to Firebase and LocalStorage
+      if (window.FirebaseBridge) {
+        window.FirebaseBridge.saveAuditItem(currentAuditRound.fiscalYear, asset.code, scanResult.item);
+      }
+      localStorage.setItem(`nongchik_audit_${activeFiscalYear}`, JSON.stringify(currentAuditRound));
+
+      renderAuditUI();
+
+      // If fast scan is OFF, open condition modal for user to review
+      if (!isFastScan) {
+        openChangeConditionModal(asset.code);
+      }
     }
 
-    function updateAuditUI() {
-      const deptAssets = assetsData.filter(a => a.dept === auditSession.dept);
-      const totalExpected = deptAssets.length;
-      const foundCount = auditSession.found.size;
-      const missingCount = Math.max(0, totalExpected - foundCount);
+    function showLatestScannedCard(asset, rec) {
+      selectedAuditAssetCode = asset.code;
+      const box = document.getElementById('latestScannedBox');
+      if (!box) return;
+      box.classList.remove('hidden');
+      document.getElementById('latestScannedName').innerText = asset.name;
+      document.getElementById('latestScannedCode').innerText = asset.code;
+      document.getElementById('latestScannedDept').innerText = asset.dept;
 
-      document.getElementById('auditFoundCount').innerText = foundCount;
-      document.getElementById('auditMisplacedCount').innerText = auditSession.misplaced.size;
-      document.getElementById('auditMissingCount').innerText = missingCount;
+      const badge = document.getElementById('latestScannedConditionBadge');
+      if (rec.condition === 'normal') {
+        badge.className = "font-bold text-emerald-700";
+        badge.innerText = "ใช้งานปกติ";
+      } else if (rec.condition === 'damaged_repairable') {
+        badge.className = "font-bold text-amber-700";
+        badge.innerText = "ชำรุดซ่อมได้";
+      } else if (rec.condition === 'deteriorated_unusable') {
+        badge.className = "font-bold text-rose-700";
+        badge.innerText = "เสนอขอจำหน่าย";
+      } else if (rec.condition === 'lost') {
+        badge.className = "font-bold text-purple-700";
+        badge.innerText = "สูญไป/หาไม่พบ";
+      }
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function handleQuickAuditKey(e) {
+      if (e.key === 'Enter') {
+        submitQuickAuditInput();
+      }
+    }
+
+    function submitQuickAuditInput() {
+      const input = document.getElementById('auditQuickInput');
+      const val = input.value.trim();
+      if (!val) return;
+      const found = assetsData.find(a => a.code.toLowerCase() === val.toLowerCase() || a.code.includes(val));
+      handleAuditScannedAsset(found, val);
+      input.value = '';
+    }
+
+    function openChangeConditionModalForLatest() {
+      if (selectedAuditAssetCode) {
+        openChangeConditionModal(selectedAuditAssetCode);
+      }
+    }
+
+    function openChangeConditionModal(code) {
+      if (!currentAuditRound) return;
+      selectedAuditAssetCode = code;
+      const sanitized = window.FirebaseBridge ? window.FirebaseBridge.sanitizeCode(code) : code.replace(/\//g, '_');
+      const rec = currentAuditRound.items ? currentAuditRound.items[sanitized] : null;
+      const asset = assetsData.find(a => a.code === code) || { name: code, code };
+
+      document.getElementById('conditionModalAssetName').innerText = asset.name;
+      document.getElementById('conditionModalAssetCode').innerText = asset.code;
+      document.getElementById('conditionModalSelect').value = rec?.condition || 'normal';
+      document.getElementById('conditionModalNotes').value = rec?.notes || '';
+
+      document.getElementById('auditConditionModal').classList.remove('hidden');
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function saveAuditConditionModal() {
+      if (!currentAuditRound || !selectedAuditAssetCode) return;
+      const cond = document.getElementById('conditionModalSelect').value;
+      const notes = document.getElementById('conditionModalNotes').value.trim();
+      const auditor = currentUser ? `${currentUser.name} (${currentUser.dept.split('-')[0]})` : 'เจ้าหน้าที่ตรวจนับ';
+
+      const res = window.AuditEngine.recordScan(currentAuditRound, selectedAuditAssetCode, auditor, cond, notes);
+      if (window.FirebaseBridge) {
+        window.FirebaseBridge.saveAuditItem(currentAuditRound.fiscalYear, selectedAuditAssetCode, res.item);
+      }
+      localStorage.setItem(`nongchik_audit_${activeFiscalYear}`, JSON.stringify(currentAuditRound));
+
+      closeModal('auditConditionModal');
+      const asset = assetsData.find(a => a.code === selectedAuditAssetCode);
+      if (asset) showLatestScannedCard(asset, res.item);
+      renderAuditUI();
+    }
+
+    function switchAuditSubtab(tab) {
+      const btnFeed = document.getElementById('subtabBtn-feed');
+      const btnReconcile = document.getElementById('subtabBtn-reconcile');
+      const feedView = document.getElementById('auditSubtab-feed');
+      const reconcileView = document.getElementById('auditSubtab-reconcile');
+
+      if (tab === 'feed') {
+        btnFeed.className = "pb-2 border-b-2 border-indigo-600 text-indigo-700 font-bold";
+        btnReconcile.className = "pb-2 text-slate-500 hover:text-slate-800 font-medium";
+        feedView.classList.remove('hidden');
+        reconcileView.classList.add('hidden');
+      } else {
+        btnReconcile.className = "pb-2 border-b-2 border-indigo-600 text-indigo-700 font-bold";
+        btnFeed.className = "pb-2 text-slate-500 hover:text-slate-800 font-medium";
+        feedView.classList.add('hidden');
+        reconcileView.classList.remove('hidden');
+        renderReconciliationList();
+      }
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function renderAuditScanLogs() {
+      const container = document.getElementById('auditScanLogs');
+      if (!container || !currentAuditRound) return;
+      const items = Object.values(currentAuditRound.items || {}).reverse();
+      document.getElementById('auditFeedTotalCount').innerText = items.length.toLocaleString();
+
+      if (items.length === 0) {
+        container.innerHTML = `<p class="text-slate-400 text-center py-6">ยังไม่มีการสแกนในรอบนี้</p>`;
+        return;
+      }
+
+      const assetsMap = new Map();
+      assetsData.forEach(a => assetsMap.set(a.code, a));
+
+      container.innerHTML = items.map(item => {
+        const a = assetsMap.get(item.code) || { name: item.code, dept: '-' };
+        let badge = `<span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-[10px] font-bold">ปกติ</span>`;
+        if (item.condition === 'damaged_repairable') {
+          badge = `<span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-[10px] font-bold">ชำรุดซ่อมได้</span>`;
+        } else if (item.condition === 'deteriorated_unusable') {
+          badge = `<span class="bg-rose-100 text-rose-800 px-2 py-0.5 rounded text-[10px] font-bold">ขอจำหน่าย</span>`;
+        } else if (item.condition === 'lost') {
+          badge = `<span class="bg-purple-100 text-purple-800 px-2 py-0.5 rounded text-[10px] font-bold">สูญไป</span>`;
+        }
+
+        return `
+          <div onclick="openChangeConditionModal('${item.code}')" class="p-2.5 hover:bg-indigo-50/50 rounded-lg cursor-pointer transition flex items-center justify-between gap-2">
+            <div>
+              <div class="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                ${badge}
+                <span>${a.name}</span>
+              </div>
+              <div class="text-[11px] text-slate-500 font-mono mt-0.5">
+                ${item.code} | สังกัด: ${a.dept} | ผู้ตรวจ: ${item.auditorName || '-'}
+                ${item.notes ? `<span class="text-rose-600 ml-1">(${item.notes})</span>` : ''}
+              </div>
+            </div>
+            <span class="text-[10px] text-slate-400">${new Date(item.auditedAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderReconciliationList() {
+      const tbody = document.getElementById('reconcileTableBody');
+      if (!tbody || !currentAuditRound || !window.AuditEngine) return;
+
+      const activeAssets = window.AuditEngine.filterActiveAssets(assetsData);
+      const deptMap = window.AuditEngine.getPendingAssetsByDept(currentAuditRound, activeAssets);
+      const selectedDept = document.getElementById('reconcileDeptFilter')?.value || '';
+
+      let list = [];
+      if (selectedDept) {
+        list = deptMap.get(selectedDept) || [];
+      } else {
+        deptMap.forEach(arr => list.push(...arr));
+      }
+
+      if (list.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-slate-400">ครบถ้วนทุกรายการ! ไม่พบครุภัณฑ์ตกสำรวจในเงื่อนไขนี้</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = list.map(item => `
+        <tr class="hover:bg-slate-50">
+          <td class="py-2.5 px-3 font-mono font-medium">${item.code}</td>
+          <td class="py-2.5 px-3">${item.name}</td>
+          <td class="py-2.5 px-3 text-slate-600">${item.dept}</td>
+          <td class="py-2.5 px-3 text-right font-mono">${(Number(item.price) || 0).toLocaleString()} ฿</td>
+          <td class="py-2.5 px-3 text-center">
+            <button onclick="markPendingAsLost('${item.code}')" class="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded text-[11px] font-bold transition">
+              ระบุเป็นสูญไป
+            </button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function markPendingAsLost(code) {
+      const reason = prompt(`กรุณาระบุเหตุผล/ข้อสังเกต สำหรับครุภัณฑ์รหัส ${code} ที่หาตัวไม่พบ:`, "ตรวจสอบทุกตึกแล้วไม่พบ มีการรื้อถอนหรือสูญหาย");
+      if (reason === null) return;
+
+      const auditor = currentUser ? `${currentUser.name} (${currentUser.dept.split('-')[0]})` : 'คณะกรรมการตรวจนับ';
+      currentAuditRound = window.AuditEngine.markExplicitLost(currentAuditRound, code, auditor, reason);
+
+      if (window.FirebaseBridge) {
+        const sanitized = window.FirebaseBridge.sanitizeCode(code);
+        window.FirebaseBridge.saveAuditItem(currentAuditRound.fiscalYear, code, currentAuditRound.items[sanitized]);
+      }
+      localStorage.setItem(`nongchik_audit_${activeFiscalYear}`, JSON.stringify(currentAuditRound));
+      renderAuditUI();
+      alert(`บันทึกสถานะ "สูญไป/หาไม่พบ" สำหรับ ${code} เรียบร้อยแล้ว`);
+    }
+
+    function openAuditSettingsModal() {
+      if (!currentAuditRound) initAuditRound();
+      document.getElementById('settingFiscalYear').value = currentAuditRound.fiscalYear || activeFiscalYear;
+      document.getElementById('settingOrderNo').value = currentAuditRound.orderNo || '';
+      document.getElementById('settingOrderDate').value = currentAuditRound.orderDate || '';
+
+      const comm = currentAuditRound.committee || [];
+      if (comm[0]) {
+        document.getElementById('comm1Name').value = comm[0].name || '';
+        document.getElementById('comm1Pos').value = comm[0].position || '';
+      }
+      if (comm[1]) {
+        document.getElementById('comm2Name').value = comm[1].name || '';
+        document.getElementById('comm2Pos').value = comm[1].position || '';
+      }
+      if (comm[2]) {
+        document.getElementById('comm3Name').value = comm[2].name || '';
+        document.getElementById('comm3Pos').value = comm[2].position || '';
+      }
+
+      document.getElementById('auditSettingsModal').classList.remove('hidden');
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function saveAuditSettings() {
+      if (!currentAuditRound) return;
+      const fy = document.getElementById('settingFiscalYear').value.trim();
+      const orderNo = document.getElementById('settingOrderNo').value.trim();
+      const orderDate = document.getElementById('settingOrderDate').value.trim();
+
+      currentAuditRound.fiscalYear = fy;
+      currentAuditRound.orderNo = orderNo;
+      currentAuditRound.orderDate = orderDate;
+      currentAuditRound.committee = [
+        { name: document.getElementById('comm1Name').value.trim(), position: document.getElementById('comm1Pos').value.trim(), role: 'ประธานกรรมการ' },
+        { name: document.getElementById('comm2Name').value.trim(), position: document.getElementById('comm2Pos').value.trim(), role: 'กรรมการ' },
+        { name: document.getElementById('comm3Name').value.trim(), position: document.getElementById('comm3Pos').value.trim(), role: 'กรรมการและเลขานุการ' }
+      ];
+
+      activeFiscalYear = fy;
+      localStorage.setItem(`nongchik_audit_${activeFiscalYear}`, JSON.stringify(currentAuditRound));
+      closeModal('auditSettingsModal');
+      renderAuditUI();
+      alert("บันทึกการตั้งค่ารอบตรวจนับและคณะกรรมการเรียบร้อยแล้ว");
+    }
+
+    function openReportPreviewModal() {
+      if (!currentAuditRound || !window.ReportGenerator) return;
+      latestStatutoryReportData = window.ReportGenerator.buildStatutoryReportData(currentAuditRound, assetsData);
+      const html = window.ReportGenerator.renderPrintableHTML(latestStatutoryReportData);
+      document.getElementById('reportPreviewContent').innerHTML = html;
+      document.getElementById('reportPreviewModal').classList.remove('hidden');
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function printGovernmentReport() {
+      if (!latestStatutoryReportData || !window.ReportGenerator) return;
+      const printArea = document.getElementById('reportPrintArea');
+      printArea.innerHTML = window.ReportGenerator.renderPrintableHTML(latestStatutoryReportData);
+      window.print();
+    }
+
+    function exportGovernmentReportExcel() {
+      if (!latestStatutoryReportData || !window.ReportGenerator) return;
+      window.ReportGenerator.exportToExcelFile(latestStatutoryReportData);
+    }
+
+    function finalizeAuditAndApplyMaster() {
+      if (!currentAuditRound || !window.AuditEngine) return;
+      const summary = window.AuditEngine.computeSummary(currentAuditRound, assetsData);
+
+      if (!confirm(`ยืนยันการปิดรอบการตรวจนับประจำปี พ.ศ. ${currentAuditRound.fiscalYear} และปรับปรุงสถานะบัญชีหลัก?\n\n- ตรวจนับแล้ว: ${summary.scannedCount} รายการ\n- คงเหลือยังไม่ตรวจ: ${summary.pendingCount} รายการ\n\nเมื่อปิดรอบแล้ว ข้อมูลจะถูกล็อกเป็น Read-only และระบบจะปรับปรุงสถานะในบัญชีครุภัณฑ์หลักทันที`)) {
+        return;
+      }
+
+      currentAuditRound = window.AuditEngine.finalizeRound(currentAuditRound);
+      const updates = window.AuditEngine.generateMasterUpdates(currentAuditRound, assetsData);
+
+      // Apply updates to assetsData
+      const updatesMap = new Map();
+      updates.forEach(u => updatesMap.set(u.code, u.newStatus));
+
+      assetsData = assetsData.map(a => {
+        if (updatesMap.has(a.code)) {
+          return { ...a, status: updatesMap.get(a.code) };
+        }
+        return a;
+      });
+
+      localStorage.setItem('nongchik_custom_assets', JSON.stringify(assetsData));
+      localStorage.setItem(`nongchik_audit_${activeFiscalYear}`, JSON.stringify(currentAuditRound));
+
+      updateStats();
+      renderTable();
+      renderAnalytics();
+      renderAuditUI();
+
+      alert(`ปิดรอบการตรวจนับ พ.ศ. ${currentAuditRound.fiscalYear} สำเร็จ และได้ปรับปรุงสถานะในบัญชีครุภัณฑ์หลักจำนวน ${updates.length} รายการ เรียบร้อยแล้ว`);
     }
 
     // Batch QR Label Printing
@@ -1180,6 +1856,7 @@
 
       repairTickets.unshift(ticket);
       localStorage.setItem('nongchik_tickets', JSON.stringify(repairTickets));
+      if (window.FirebaseBridge) window.FirebaseBridge.saveTicket(ticket);
       closeModal('repairModal');
       document.getElementById('repairIssue').value = '';
       alert(`ส่งใบแจ้งซ่อมเรียบร้อย! ส่งเรื่องไปยัง [${targetTeam}]`);
@@ -1191,6 +1868,7 @@
       if (t) {
         t.status = newStatus;
         localStorage.setItem('nongchik_tickets', JSON.stringify(repairTickets));
+        if (window.FirebaseBridge) window.FirebaseBridge.saveTicket(t);
         alert(`อัปเดตสถานะตั๋ว ${ticketId} เป็น [${newStatus}]`);
         renderTickets();
       }
@@ -1378,6 +2056,7 @@
         renderTickets();
       } else if (tab === 'audit') {
         auditView.classList.remove('hidden');
+        initAuditRound();
       } else if (tab === 'analytics') {
         analyticsView.classList.remove('hidden');
         renderAnalytics();
@@ -1385,24 +2064,94 @@
       if (window.lucide) lucide.createIcons();
     }
 
+    function updateCloudStatusUI() {
+      const dot = document.getElementById('cloudStatusDot');
+      const txt = document.getElementById('cloudStatusText');
+      if (!dot || !txt) return;
+
+      const status = window.FirebaseBridge ? window.FirebaseBridge.getStatus() : 'local_storage';
+      if (status === 'connected') {
+        dot.className = "w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse";
+        txt.innerText = "คลาวด์ออนไลน์ (Firestore)";
+      } else if (status === 'offline_cached') {
+        dot.className = "w-2.5 h-2.5 rounded-full bg-amber-400";
+        txt.innerText = "ออฟไลน์ (แคช IndexedDB)";
+      } else {
+        dot.className = "w-2.5 h-2.5 rounded-full bg-slate-400";
+        txt.innerText = "LocalStorage";
+      }
+    }
+
+    async function initFirebaseConnection() {
+      const cfg = localStorage.getItem('nongchik_firebase_config');
+      if (cfg && window.FirebaseBridge) {
+        const success = await window.FirebaseBridge.init(cfg);
+        if (success) {
+          // Subscribe to real-time asset updates
+          window.FirebaseBridge.subscribeAssets(remoteAssets => {
+            if (remoteAssets && remoteAssets.length > 0) {
+              assetsData = remoteAssets;
+              localStorage.setItem('nongchik_custom_assets', JSON.stringify(assetsData));
+              updateStats();
+              renderTable();
+              renderAnalytics();
+              renderAuditUI();
+            }
+          });
+
+          // Subscribe to annual audit updates
+          window.FirebaseBridge.subscribeAuditRound(activeFiscalYear, remoteRound => {
+            if (remoteRound) {
+              currentAuditRound = remoteRound;
+              localStorage.setItem(`nongchik_audit_${activeFiscalYear}`, JSON.stringify(currentAuditRound));
+              renderAuditUI();
+            }
+          });
+        }
+      }
+      updateCloudStatusUI();
+    }
+
     function openFirebaseModal() {
+      const cfg = localStorage.getItem('nongchik_firebase_config') || '';
+      document.getElementById('firebaseConfigInput').value = cfg;
       document.getElementById('firebaseModal').classList.remove('hidden');
       if (window.lucide) lucide.createIcons();
     }
 
-    function saveFirebaseConfig() {
+    async function saveFirebaseConfig() {
       const cfg = document.getElementById('firebaseConfigInput').value.trim();
       if (!cfg) return alert("กรุณาวางโค้ด Firebase Config");
       localStorage.setItem('nongchik_firebase_config', cfg);
-      alert("บันทึกการตั้งค่า Firebase ในเครื่องเรียบร้อยแล้ว");
+      alert("บันทึกการตั้งค่า Firebase ในเครื่องเรียบร้อยแล้ว กำลังเชื่อมต่อ...");
+      await initFirebaseConnection();
+      closeModal('firebaseModal');
     }
 
-    function syncAllToCloud() {
-      alert(`เตรียมซิงค์ครุภัณฑ์ ${assetsData.length.toLocaleString()} รายการขึ้น Cloud Firestore`);
+    async function syncAllToCloud() {
+      if (!window.FirebaseBridge || window.FirebaseBridge.getStatus() === 'local_storage') {
+        return alert("กรุณากรอก Firebase Config และเชื่อมต่อ Cloud สำเร็จก่อนเริ่มอัปโหลด");
+      }
+
+      if (!confirm(`ต้องการอัปโหลดครุภัณฑ์ทั้งหมด ${assetsData.length.toLocaleString()} รายการขึ้น Cloud Firestore ใช่หรือไม่?`)) {
+        return;
+      }
+
+      try {
+        const result = await window.FirebaseBridge.seedInitialAssets(assetsData, (done, total) => {
+          console.log(`[FirebaseBridge] Seeding progress: ${done}/${total}`);
+        });
+        alert(`อัปโหลดขึ้น Cloud Firestore สำเร็จทั้งสิ้น ${result.inserted.toLocaleString()} รายการ`);
+        closeModal('firebaseModal');
+      } catch (err) {
+        alert("เกิดข้อผิดพลาดในการอัปโหลด: " + err.message);
+      }
     }
 
-    window.addEventListener('DOMContentLoaded', () => {
+    window.addEventListener('DOMContentLoaded', async () => {
       initData();
+      await initFirebaseConnection();
+      initAuditRound();
       if (window.lucide) lucide.createIcons();
     });
   </script>
