@@ -2086,8 +2086,17 @@
       }
     }
 
+    const DEFAULT_FIREBASE_CONFIG = {
+      projectId: "nongchik-asset-app",
+      appId: "1:219206073762:web:d942280e4abaf7e67786fb",
+      storageBucket: "nongchik-asset-app.firebasestorage.app",
+      apiKey: "AIzaSyB3yIPDO_LLLzVLaoebakiYb4IDLESPB1M",
+      authDomain: "nongchik-asset-app.firebaseapp.com",
+      messagingSenderId: "219206073762"
+    };
+
     async function initFirebaseConnection() {
-      const cfg = localStorage.getItem('nongchik_firebase_config');
+      const cfg = localStorage.getItem('nongchik_firebase_config') || DEFAULT_FIREBASE_CONFIG;
       if (cfg && window.FirebaseBridge) {
         window.FirebaseBridge.reset();
         const success = await window.FirebaseBridge.init(cfg);
@@ -2118,8 +2127,8 @@
     }
 
     function openFirebaseModal() {
-      const cfg = localStorage.getItem('nongchik_firebase_config') || '';
-      document.getElementById('firebaseConfigInput').value = cfg;
+      const cfg = localStorage.getItem('nongchik_firebase_config') || JSON.stringify(DEFAULT_FIREBASE_CONFIG, null, 2);
+      document.getElementById('firebaseConfigInput').value = typeof cfg === 'string' ? cfg : JSON.stringify(cfg, null, 2);
       document.getElementById('firebaseModal').classList.remove('hidden');
       if (window.lucide) lucide.createIcons();
     }
