@@ -1,0 +1,1410 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ระบบบริหารงานพัสดุและครุภัณฑ์ - โรงพยาบาลหนองจิก</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- QR Code Generator & Scanner -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <!-- Google Fonts: Sarabun -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    body { font-family: 'Sarabun', sans-serif; }
+    .badge-ok { @apply bg-emerald-100 text-emerald-800 border border-emerald-300; }
+    .badge-repair { @apply bg-amber-100 text-amber-800 border border-amber-300; }
+    .badge-discard { @apply bg-rose-100 text-rose-800 border border-rose-300; }
+    .badge-transfer { @apply bg-cyan-100 text-cyan-800 border border-cyan-300; }
+
+    @media print {
+      body * { visibility: hidden; }
+      #batchPrintArea, #batchPrintArea * { visibility: visible; }
+      #batchPrintArea { position: absolute; left: 0; top: 0; width: 100%; display: block !important; }
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+  <!-- ================= TOP NAVIGATION ================= -->
+  <header class="bg-gradient-to-r from-teal-700 via-teal-800 to-cyan-900 text-white shadow-lg sticky top-0 z-40 no-print">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <!-- Logo & Title -->
+        <div class="flex items-center space-x-3 cursor-pointer" onclick="switchTab('all')">
+          <div class="bg-white p-2 rounded-xl shadow-md text-teal-800">
+            <i data-lucide="cross" class="w-6 h-6 stroke-[2.5]"></i>
+          </div>
+          <div>
+            <div class="font-bold text-lg leading-tight flex items-center gap-2">
+              โรงพยาบาลหนองจิก
+              <span class="text-xs bg-teal-500/30 text-teal-200 px-2 py-0.5 rounded-full font-normal border border-teal-400/30">งานพัสดุ</span>
+            </div>
+            <p class="text-xs text-teal-200/90 font-light">Nongchik Hospital Asset Management</p>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex items-center space-x-2">
+          <!-- Cloud Sync Button -->
+          <button onclick="openFirebaseModal()" title="เชื่อมต่อ Firebase" class="hidden md:flex items-center gap-1.5 bg-teal-900/60 hover:bg-teal-900 text-teal-200 border border-teal-500/30 px-3 py-1.5 rounded-lg text-xs transition">
+            <i data-lucide="cloud" class="w-4 h-4 text-amber-400"></i>
+            <span>Firebase Sync</span>
+          </button>
+
+          <!-- Scan Button -->
+          <button onclick="openScannerModal()" class="flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-white px-3.5 py-1.5 rounded-lg text-sm font-medium shadow transition">
+            <i data-lucide="scan-line" class="w-4 h-4"></i>
+            <span class="hidden sm:inline">สแกน QR</span>
+          </button>
+
+          <!-- User Menu / Login -->
+          <div id="userSection">
+            <button onclick="openAuthModal()" class="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 border border-white/20 text-white px-3 py-1.5 rounded-lg text-sm transition">
+              <i data-lucide="user" class="w-4 h-4"></i>
+              <span id="userNameDisplay">เข้าสู่ระบบ (PDPA)</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ================= MAIN WORKSPACE ================= -->
+  <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 no-print">
+
+    <!-- KPI Summary Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
+        <div>
+          <p class="text-xs font-medium text-slate-500">ครุภัณฑ์ทั้งหมด</p>
+          <p id="statTotal" class="text-2xl font-bold text-slate-800 mt-1">...</p>
+        </div>
+        <div class="bg-blue-50 p-2.5 rounded-xl text-blue-600">
+          <i data-lucide="boxes" class="w-6 h-6"></i>
+        </div>
+      </div>
+      <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
+        <div>
+          <p class="text-xs font-medium text-slate-500">ใช้งานปกติ</p>
+          <p id="statActive" class="text-2xl font-bold text-emerald-600 mt-1">...</p>
+        </div>
+        <div class="bg-emerald-50 p-2.5 rounded-xl text-emerald-600">
+          <i data-lucide="check-circle" class="w-6 h-6"></i>
+        </div>
+      </div>
+      <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
+        <div>
+          <p class="text-xs font-medium text-slate-500">จำหน่าย/ยกเลิก</p>
+          <p id="statDisposed" class="text-2xl font-bold text-rose-600 mt-1">...</p>
+        </div>
+        <div class="bg-rose-50 p-2.5 rounded-xl text-rose-600">
+          <i data-lucide="archive" class="w-6 h-6"></i>
+        </div>
+      </div>
+      <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
+        <div>
+          <p class="text-xs font-medium text-slate-500">มูลค่ารวม (บาท)</p>
+          <p id="statValue" class="text-lg font-bold text-teal-700 mt-1">...</p>
+        </div>
+        <div class="bg-teal-50 p-2.5 rounded-xl text-teal-600">
+          <i data-lucide="banknote" class="w-6 h-6"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs & Utility Buttons -->
+    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
+      <div class="flex flex-wrap gap-2">
+        <button onclick="switchTab('all')" id="tabBtn-all" class="px-4 py-2 text-sm font-semibold rounded-lg bg-teal-600 text-white shadow-sm">
+          ครุภัณฑ์ทั้งหมด
+        </button>
+        <button onclick="switchTab('mydept')" id="tabBtn-mydept" class="px-4 py-2 text-sm font-medium rounded-lg text-slate-600 hover:bg-slate-200">
+          ของในตึก/แผนกฉัน
+        </button>
+        <button onclick="switchTab('transfers')" id="tabBtn-transfers" class="px-4 py-2 text-sm font-medium rounded-lg text-slate-600 hover:bg-slate-200 flex items-center gap-1.5">
+          ประวัติยืม-คืน <span id="transferBadge" class="bg-cyan-600 text-white text-xs px-1.5 py-0.2 rounded-full hidden">0</span>
+        </button>
+        <button onclick="switchTab('tickets')" id="tabBtn-tickets" class="px-4 py-2 text-sm font-medium rounded-lg text-slate-600 hover:bg-slate-200 flex items-center gap-1.5">
+          รายการแจ้งซ่อม <span id="ticketCountBadge" class="bg-amber-500 text-white text-xs px-1.5 py-0.2 rounded-full hidden">0</span>
+        </button>
+        <button onclick="switchTab('audit')" id="tabBtn-audit" class="px-4 py-2 text-sm font-medium rounded-lg text-indigo-700 hover:bg-indigo-50 border border-indigo-200 flex items-center gap-1.5">
+          <i data-lucide="clipboard-check" class="w-4 h-4"></i> โหมดตรวจนับประจำปี
+        </button>
+        <button onclick="switchTab('analytics')" id="tabBtn-analytics" class="px-4 py-2 text-sm font-medium rounded-lg text-slate-600 hover:bg-slate-200 flex items-center gap-1.5">
+          <i data-lucide="pie-chart" class="w-4 h-4 text-teal-600"></i> แดชบอร์ดสรุป
+        </button>
+      </div>
+
+      <!-- Action Utilities -->
+      <div class="flex items-center gap-2">
+        <!-- Import CSV Button -->
+        <label class="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg cursor-pointer transition">
+          <i data-lucide="upload" class="w-4 h-4 text-slate-500"></i> นำเข้า CSV
+          <input type="file" id="csvFileInput" accept=".csv" class="hidden" onchange="handleCSVUpload(event)">
+        </label>
+        
+        <!-- Batch Print QR Labels -->
+        <button onclick="openBatchPrintModal()" class="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-300 rounded-lg transition">
+          <i data-lucide="printer" class="w-4 h-4 text-indigo-600"></i> พิมพ์สติกเกอร์ QR ยกชุด
+        </button>
+
+        <!-- Export to Excel Button -->
+        <button onclick="exportToCSV()" class="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg transition">
+          <i data-lucide="file-spreadsheet" class="w-4 h-4 text-emerald-600"></i> ส่งออก Excel
+        </button>
+      </div>
+    </div>
+
+    <!-- ================= FILTER & SEARCH BAR ================= -->
+    <div id="searchFilterBox" class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 grid grid-cols-1 md:grid-cols-4 gap-3">
+      <div class="md:col-span-2 relative">
+        <i data-lucide="search" class="w-5 h-5 absolute left-3 top-2.5 text-slate-400"></i>
+        <input type="text" id="searchInput" oninput="renderTable()" placeholder="ค้นหาเลขครุภัณฑ์, ชื่ออุปกรณ์ เช่น คอมพิวเตอร์, ออกซิเจน, ชั่งน้ำหนัก..." 
+          class="w-full pl-10 pr-4 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500">
+      </div>
+      <div>
+        <select id="deptFilter" onchange="renderTable()" class="w-full py-2 px-3 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500">
+          <option value="">-- ทุกแผนก/ฝ่าย (34 แผนก) --</option>
+        </select>
+      </div>
+      <div>
+        <select id="statusFilter" onchange="renderTable()" class="w-full py-2 px-3 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500">
+          <option value="">-- ทุกสถานะ --</option>
+          <option value="ใช้งานปกติ">ใช้งานปกติ</option>
+          <option value="จำหน่ายแล้ว/ยกเลิกการใช้">จำหน่ายแล้ว/ยกเลิกการใช้</option>
+          <option value="รอจำหน่าย">รอจำหน่าย</option>
+          <option value="ยังไม่สรุปสถานะ">ยังไม่สรุปสถานะ</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- ================= DATA TABLE VIEW ================= -->
+    <div id="assetTableView" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div class="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+        <h2 class="text-sm font-bold text-slate-700 flex items-center gap-2">
+          <i data-lucide="list" class="w-4 h-4 text-teal-600"></i>
+          รายการครุภัณฑ์ (<span id="showingCount">0</span> รายการ)
+        </h2>
+        <span class="text-xs text-slate-500">คลิกที่รายการเพื่อดูรายละเอียด / แจ้งซ่อม / ขอยืมย้าย / พิมพ์ QR Code</span>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
+          <thead class="bg-slate-100 text-slate-600 font-semibold text-xs uppercase tracking-wider">
+            <tr>
+              <th class="py-3 px-4">เลขครุภัณฑ์</th>
+              <th class="py-3 px-4">ชื่อรายการครุภัณฑ์</th>
+              <th class="py-3 px-4">แผนกที่ครองครอง</th>
+              <th class="py-3 px-4">ราคาจัดซื้อ</th>
+              <th class="py-3 px-4">วันที่ได้มา</th>
+              <th class="py-3 px-4">สถานะ</th>
+              <th class="py-3 px-4 text-center">จัดการ</th>
+            </tr>
+          </thead>
+          <tbody id="assetTableBody" class="divide-y divide-slate-100"></tbody>
+        </table>
+      </div>
+      <!-- Pagination -->
+      <div class="p-4 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600 bg-slate-50">
+        <span id="pageInfo">หน้าที่ 1</span>
+        <div class="space-x-1">
+          <button onclick="prevPage()" class="px-3 py-1 bg-white border border-slate-300 rounded hover:bg-slate-100">ก่อนหน้า</button>
+          <button onclick="nextPage()" class="px-3 py-1 bg-white border border-slate-300 rounded hover:bg-slate-100">ถัดไป</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= TRANSFERS VIEW ================= -->
+    <div id="transfersView" class="hidden bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-4">
+      <div class="flex items-center justify-between border-b pb-4">
+        <div>
+          <h2 class="text-lg font-bold text-slate-800">ประวัติการยืม-คืน และโอนย้ายครุภัณฑ์ข้ามแผนก</h2>
+          <p class="text-xs text-slate-500">ลดปัญหาข้อพิพาทเรื่องของหายระหว่างตึกผู้ป่วยใน, ห้องคลอด, ฉุกเฉิน และแผนกอื่นๆ</p>
+        </div>
+      </div>
+      <div id="transfersList" class="space-y-3"></div>
+    </div>
+
+    <!-- ================= MAINTENANCE TICKETS VIEW ================= -->
+    <div id="ticketsView" class="hidden bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-4">
+      <div class="flex items-center justify-between border-b pb-4">
+        <div>
+          <h2 class="text-lg font-bold text-slate-800">รายการแจ้งซ่อมบำรุงและปัญหาครุภัณฑ์</h2>
+          <p class="text-xs text-slate-500">ทีมช่างซ่อมบำรุง (CAL) และศูนย์คอมพิวเตอร์ (COM) สามารถกดอัปเดตสถานะงานซ่อมได้ทันที</p>
+        </div>
+      </div>
+      <div id="ticketsList" class="space-y-3"></div>
+    </div>
+
+    <!-- ================= ANNUAL AUDIT MODE VIEW ================= -->
+    <div id="auditView" class="hidden bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-6">
+      <div class="border-b pb-4 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 class="text-lg font-bold text-indigo-900 flex items-center gap-2">
+            <i data-lucide="clipboard-check" class="w-5 h-5 text-indigo-600"></i>
+            โหมดตรวจนับพัสดุประจำปี (Annual Stocktaking Audit)
+          </h2>
+          <p class="text-xs text-slate-500">เลือกแผนกเป้าหมาย แล้วใช้กล้องมือถือสแกน QR Code ตรวจนับต่อเนื่องได้ทันที</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <label class="text-xs font-semibold text-slate-700">แผนกที่กำลังตรวจ:</label>
+          <select id="auditDeptSelect" onchange="initAuditSession()" class="py-1.5 px-3 border border-indigo-300 rounded-lg text-sm bg-indigo-50 font-medium">
+            <option value="">-- เลือกแผนกที่ต้องการตรวจนับ --</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Audit Progress Indicator -->
+      <div id="auditProgressBox" class="hidden space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="bg-emerald-50 border border-emerald-200 p-4 rounded-xl text-center">
+            <p class="text-xs text-emerald-600 font-semibold">ตรวจพบถูกต้อง (ชิ้น)</p>
+            <p id="auditFoundCount" class="text-2xl font-bold text-emerald-800 mt-1">0</p>
+          </div>
+          <div class="bg-amber-50 border border-amber-200 p-4 rounded-xl text-center">
+            <p class="text-xs text-amber-600 font-semibold">พบแต่ผิดตึก/ย้ายมา (ชิ้น)</p>
+            <p id="auditMisplacedCount" class="text-2xl font-bold text-amber-800 mt-1">0</p>
+          </div>
+          <div class="bg-rose-50 border border-rose-200 p-4 rounded-xl text-center">
+            <p class="text-xs text-rose-600 font-semibold">ยังตรวจไม่พบ (ชิ้น)</p>
+            <p id="auditMissingCount" class="text-2xl font-bold text-rose-800 mt-1">0</p>
+          </div>
+        </div>
+
+        <div class="flex justify-center pt-2">
+          <button onclick="openScannerModal(true)" class="flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg transition">
+            <i data-lucide="camera" class="w-5 h-5"></i>
+            เปิดกล้องสแกนตรวจนับต่อเนื่อง
+          </button>
+        </div>
+
+        <div class="mt-4 border rounded-xl overflow-hidden">
+          <div class="bg-slate-100 p-3 text-xs font-bold text-slate-700 border-b">บันทึกผลการสแกนตรวจนับประจำห้อง/แผนก</div>
+          <div id="auditScanLogs" class="divide-y divide-slate-100 max-h-72 overflow-y-auto text-xs p-2 space-y-1">
+            <p class="text-slate-400 text-center py-4">ยังไม่มีการสแกนในรอบนี้</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= EXECUTIVE ANALYTICS VIEW ================= -->
+    <div id="analyticsView" class="hidden bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-6">
+      <div class="border-b pb-4">
+        <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+          <i data-lucide="bar-chart-3" class="w-5 h-5 text-teal-600"></i>
+          แดชบอร์ดภาพรวมและสถิติมูลค่าครุภัณฑ์ โรงพยาบาลหนองจิก
+        </h2>
+        <p class="text-xs text-slate-500">ข้อมูลเชิงสถิติสำหรับผู้บริหารและการวางแผนจัดซื้อจัดจ้างทดแทน</p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
+          <h3 class="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+            <i data-lucide="building-2" class="w-4 h-4 text-teal-600"></i>
+            5 อันดับแผนกที่มีมูลค่าครุภัณฑ์สูงสุด
+          </h3>
+          <div id="topDeptBars" class="space-y-3 text-xs"></div>
+        </div>
+
+        <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
+          <h3 class="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+            <i data-lucide="clock" class="w-4 h-4 text-amber-600"></i>
+            การประเมินอายุการใช้งาน (เตรียมตั้งงบทดแทน)
+          </h3>
+          <div class="space-y-2.5 text-xs">
+            <div class="flex justify-between items-center p-2.5 bg-white rounded-lg border">
+              <span class="text-slate-600">อายุมากกว่า 10 ปี (ควรสำรวจสภาพ):</span>
+              <strong id="statOld10" class="text-rose-600 font-mono text-sm">0 ชิ้น</strong>
+            </div>
+            <div class="flex justify-between items-center p-2.5 bg-white rounded-lg border">
+              <span class="text-slate-600">อายุ 5 - 10 ปี (รอบบำรุงรักษาเชิงรุก):</span>
+              <strong id="statOld5to10" class="text-amber-600 font-mono text-sm">0 ชิ้น</strong>
+            </div>
+            <div class="flex justify-between items-center p-2.5 bg-white rounded-lg border">
+              <span class="text-slate-600">อายุไม่เกิน 5 ปี (สภาพใหม่/อยู่ในประกัน):</span>
+              <strong id="statNew5" class="text-emerald-600 font-mono text-sm">0 ชิ้น</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ================= BATCH QR STICKER PRINT MODAL ================= -->
+  <div id="batchPrintModal" class="fixed inset-0 bg-slate-900/70 z-50 hidden flex items-center justify-center p-4 no-print">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center border-b pb-2">
+        <h3 class="font-bold text-slate-800 flex items-center gap-2 text-indigo-700">
+          <i data-lucide="printer" class="w-5 h-5"></i> พิมพ์สติกเกอร์ QR Code ยกชุด
+        </h3>
+        <button onclick="closeModal('batchPrintModal')" class="text-slate-400"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <p class="text-xs text-slate-600">เลือกแผนกที่ต้องการพิมพ์สติกเกอร์ QR Code ระบบจะจัดหน้าสำหรับกระดาษสติกเกอร์ A4 ให้โดยอัตโนมัติ</p>
+      <div>
+        <label class="text-xs font-semibold text-slate-700">เลือกแผนก:</label>
+        <select id="batchPrintDeptSelect" class="w-full mt-1 p-2 border rounded-lg text-sm bg-white"></select>
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-slate-700">จำนวนรายการที่ต้องการพิมพ์:</label>
+        <select id="batchPrintLimit" class="w-full mt-1 p-2 border rounded-lg text-sm bg-white">
+          <option value="21">21 ชิ้น (1 แผ่น A4: 3x7 ดวง)</option>
+          <option value="42">42 ชิ้น (2 แผ่น A4)</option>
+          <option value="100">100 ชิ้นแรก</option>
+          <option value="all">ทั้งหมดในแผนก</option>
+        </select>
+      </div>
+      <button onclick="generateBatchStickers()" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-sm shadow transition">
+        สร้างสติกเกอร์และสั่งพิมพ์
+      </button>
+    </div>
+  </div>
+
+  <!-- Print Sheet Container (Visible on Print) -->
+  <div id="batchPrintArea" class="hidden print:block p-4">
+    <div class="text-center font-bold text-sm mb-4 border-b pb-2">
+      สติกเกอร์ครุภัณฑ์ โรงพยาบาลหนองจิก
+    </div>
+    <div id="batchStickersGrid" class="grid grid-cols-3 gap-3"></div>
+  </div>
+
+  <!-- ================= ASSET DETAIL & ACTION MODAL ================= -->
+  <div id="assetDetailModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4 no-print">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl relative space-y-4 border border-slate-100">
+      <button onclick="closeModal('assetDetailModal')" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+
+      <div class="flex items-start gap-4">
+        <div id="assetQrBox" class="p-2 border rounded-xl bg-white shadow-sm shrink-0"></div>
+        <div>
+          <span id="modalAssetStatus" class="inline-block text-xs px-2.5 py-0.5 rounded-full font-medium mb-1.5"></span>
+          <h3 id="modalAssetName" class="font-bold text-slate-900 leading-snug"></h3>
+          <p id="modalAssetCode" class="text-xs font-mono text-teal-700 font-semibold mt-1"></p>
+        </div>
+      </div>
+
+      <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs space-y-2">
+        <div class="flex justify-between"><span class="text-slate-500">แผนกผู้ครองครอง:</span><span id="modalAssetDept" class="font-semibold text-slate-800"></span></div>
+        <div class="flex justify-between"><span class="text-slate-500">ราคาที่ได้มา:</span><span id="modalAssetPrice" class="font-semibold text-slate-800"></span></div>
+        <div class="flex justify-between"><span class="text-slate-500">วันที่ขึ้นทะเบียน:</span><span id="modalAssetDate" class="font-semibold text-slate-800"></span></div>
+      </div>
+
+      <!-- Action Buttons for Staff -->
+      <div class="grid grid-cols-3 gap-2 pt-2">
+        <button onclick="openRepairModal()" class="flex flex-col items-center justify-center p-2.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 rounded-xl text-xs font-medium transition">
+          <i data-lucide="wrench" class="w-5 h-5 mb-1 text-amber-600"></i>
+          แจ้งชำรุด/ซ่อม
+        </button>
+        <button onclick="openTransferModal()" class="flex flex-col items-center justify-center p-2.5 bg-cyan-50 hover:bg-cyan-100 border border-cyan-200 text-cyan-800 rounded-xl text-xs font-medium transition">
+          <i data-lucide="arrow-left-right" class="w-5 h-5 mb-1 text-cyan-600"></i>
+          ขอยืม/ย้ายตึก
+        </button>
+        <button onclick="printSingleQrSticker()" class="flex flex-col items-center justify-center p-2.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 rounded-xl text-xs font-medium transition">
+          <i data-lucide="printer" class="w-5 h-5 mb-1 text-slate-600"></i>
+          พิมพ์ QR Code
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= QR SCANNER MODAL ================= -->
+  <div id="scannerModal" class="fixed inset-0 bg-slate-900/70 z-50 hidden flex items-center justify-center p-4 no-print">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl relative space-y-4">
+      <div class="flex justify-between items-center border-b pb-2">
+        <h3 class="font-bold text-slate-800 flex items-center gap-2">
+          <i data-lucide="camera" class="w-5 h-5 text-teal-600"></i> สแกน QR Code ครุภัณฑ์
+        </h3>
+        <button onclick="closeScannerModal()" class="text-slate-400 hover:text-slate-600">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <div id="qrReader" class="overflow-hidden rounded-xl border bg-black h-64"></div>
+      <p id="scanInstruction" class="text-xs text-center text-slate-500">ส่องกล้องไปที่ QR Code บนสติกเกอร์ที่ติดอยู่กับตัวเครื่อง</p>
+    </div>
+  </div>
+
+  <!-- ================= TRANSFER / BORROW MODAL ================= -->
+  <div id="transferModal" class="fixed inset-0 bg-slate-900/60 z-50 hidden flex items-center justify-center p-4 no-print">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center border-b pb-2">
+        <h3 class="font-bold text-slate-800 flex items-center gap-2 text-cyan-800">
+          <i data-lucide="arrow-left-right" class="w-5 h-5"></i> ขอยืม / ย้ายตึกพัสดุ
+        </h3>
+        <button onclick="closeModal('transferModal')" class="text-slate-400"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div class="text-xs text-slate-600 space-y-3">
+        <p>ครุภัณฑ์: <strong id="transferAssetName" class="text-slate-900"></strong></p>
+        <div>
+          <label class="font-semibold text-slate-700">ย้าย/ยืมไปยังแผนก:</label>
+          <select id="transferToDept" class="w-full mt-1 p-2 border rounded-lg text-sm bg-white"></select>
+        </div>
+        <div>
+          <label class="font-semibold text-slate-700">ประเภทรายการ:</label>
+          <select id="transferType" class="w-full mt-1 p-2 border rounded-lg text-sm bg-white">
+            <option value="ยืมใช้งานชั่วคราว">ยืมใช้งานชั่วคราว</option>
+            <option value="โอนย้ายสิทธิ์ถาวร">โอนย้ายสิทธิ์ถาวร</option>
+          </select>
+        </div>
+        <div>
+          <label class="font-semibold text-slate-700">เหตุผล / วัตถุประสงค์:</label>
+          <input type="text" id="transferReason" class="w-full mt-1 p-2 border rounded-lg text-sm" placeholder="เช่น เครื่องที่ตึกฉุกเฉินเสีย ขอสำรองใช้...">
+        </div>
+      </div>
+      <button onclick="submitTransfer()" class="w-full py-2.5 bg-cyan-700 hover:bg-cyan-800 text-white font-bold rounded-lg text-sm shadow transition">
+        บันทึกการยืม/ย้าย
+      </button>
+    </div>
+  </div>
+
+  <!-- ================= REPAIR TICKET MODAL ================= -->
+  <div id="repairModal" class="fixed inset-0 bg-slate-900/60 z-50 hidden flex items-center justify-center p-4 no-print">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center border-b pb-2">
+        <h3 class="font-bold text-slate-800 flex items-center gap-2 text-amber-700">
+          <i data-lucide="wrench" class="w-5 h-5"></i> แจ้งซ่อมครุภัณฑ์
+        </h3>
+        <button onclick="closeModal('repairModal')" class="text-slate-400"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div>
+        <label class="text-xs text-slate-600 font-semibold">อาการชำรุด / ปัญหาที่พบ:</label>
+        <textarea id="repairIssue" rows="3" class="w-full mt-1 p-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none" placeholder="เช่น เปิดไม่ติด, สายรั่ว, ปริ้นท์แล้วกระดาษติด..."></textarea>
+      </div>
+      <div>
+        <label class="text-xs text-slate-600 font-semibold">ความเร่งด่วน:</label>
+        <select id="repairUrgency" class="w-full mt-1 p-2 border rounded-lg text-sm">
+          <option value="ทั่วไป">ทั่วไป (ตามคิว)</option>
+          <option value="ด่วน">ด่วน (มีผลกระทบต่อบริการ)</option>
+          <option value="ด่วนวิกฤต">ด่วนวิกฤต (เครื่องช่วยชีวิต/ฉุกเฉิน)</option>
+        </select>
+      </div>
+      <button onclick="submitRepairTicket()" class="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-sm shadow transition">
+        ส่งใบแจ้งซ่อม
+      </button>
+    </div>
+  </div>
+
+  <!-- ================= FIREBASE SYNC MODAL ================= -->
+  <div id="firebaseModal" class="fixed inset-0 bg-slate-900/70 z-50 hidden flex items-center justify-center p-4 no-print">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center border-b pb-2">
+        <h3 class="font-bold text-slate-800 flex items-center gap-2 text-teal-800">
+          <i data-lucide="cloud" class="w-5 h-5 text-amber-500"></i> ซิงค์ข้อมูลขึ้น Firebase Cloud
+        </h3>
+        <button onclick="closeModal('firebaseModal')" class="text-slate-400"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <p class="text-xs text-slate-600 leading-relaxed">
+        ท่านสามารถเชื่อมต่อฐานข้อมูล Cloud Firestore เพื่อให้เจ้าหน้าที่ทุกคนเข้าถึงข้อมูล Real-time ร่วมกันได้ เพียงนำ <strong>firebaseConfig</strong> มาใส่ในช่องด้านล่างนี้:
+      </p>
+      <div>
+        <label class="text-xs font-semibold text-slate-700">Firebase Config (JSON / JavaScript Object):</label>
+        <textarea id="firebaseConfigInput" rows="6" class="w-full mt-1 p-2.5 font-mono text-xs border rounded-lg bg-slate-50" placeholder='{
+  "apiKey": "AIzaSy...",
+  "authDomain": "nongchik-asset.firebaseapp.com",
+  "projectId": "nongchik-asset",
+  "storageBucket": "nongchik-asset.appspot.com"
+}'></textarea>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="saveFirebaseConfig()" class="flex-1 py-2.5 bg-teal-700 hover:bg-teal-800 text-white font-bold rounded-lg text-xs shadow transition">
+          บันทึกการตั้งค่า Firebase
+        </button>
+        <button onclick="syncAllToCloud()" class="flex-1 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-xs shadow transition">
+          🚀 อัปโหลดครุภัณฑ์ขึ้น Cloud
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= PDPA AUTHENTICATION MODAL ================= -->
+  <div id="authModal" class="fixed inset-0 bg-slate-900/70 z-50 hidden flex items-center justify-center p-4 no-print">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-center border-b pb-2">
+        <h3 class="font-bold text-slate-800 flex items-center gap-2 text-teal-800">
+          <i data-lucide="shield-check" class="w-5 h-5"></i> ลงทะเบียนบุคลากรตามเกณฑ์ PDPA
+        </h3>
+        <button onclick="closeModal('authModal')" class="text-slate-400"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="font-semibold text-slate-700">ชื่อ - สกุล:</label>
+          <input type="text" id="regFullName" class="w-full p-2 border rounded-lg mt-1 text-sm" placeholder="เช่น พว. สุดา ชูเกียรติ">
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="font-semibold text-slate-700">แผนก/กลุ่มงาน:</label>
+            <select id="regDept" class="w-full p-2 border rounded-lg mt-1 text-sm"></select>
+          </div>
+          <div>
+            <label class="font-semibold text-slate-700">เบอร์โทรติดต่อภายใน/มือถือ:</label>
+            <input type="tel" id="regPhone" class="w-full p-2 border rounded-lg mt-1 text-sm" placeholder="เช่น 081-2345678">
+          </div>
+        </div>
+        <div>
+          <label class="font-semibold text-slate-700">อีเมลโรงพยาบาล หรือ อีเมลส่วนบุคคล:</label>
+          <input type="email" id="regEmail" class="w-full p-2 border rounded-lg mt-1 text-sm" placeholder="user@nongchik.go.th">
+        </div>
+
+        <!-- PDPA Privacy Notice Box -->
+        <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-2">
+          <p class="font-bold text-slate-800 text-[11px] flex items-center gap-1">
+            <i data-lucide="file-text" class="w-3.5 h-3.5 text-teal-600"></i>
+            คำชี้แจงการคุ้มครองข้อมูลส่วนบุคคล (PDPA Privacy Notice)
+          </p>
+          <div class="text-[11px] text-slate-600 space-y-1 h-20 overflow-y-auto pr-1">
+            <p>โรงพยาบาลหนองจิก เก็บรวบรวมและใช้ข้อมูลส่วนบุคคลของท่าน (ชื่อ, ตำแหน่ง, สังกัด, ข้อมูลติดต่อ) เพื่อวัตถุประสงค์ในการระบุตัวตนผู้ถือครอง ยืม-คืน ตรวจนับสต๊อก และแจ้งซ่อมบำรุงพัสดุครุภัณฑ์ของทางราชการให้ถูกต้องโปร่งใสตามระเบียบพัสดุภาครัฐ ข้อมูลของท่านจะถูกจัดเก็บอย่างปลอดภัยบนระบบ Cloud ที่ได้มาตรฐานความปลอดภัยสากล</p>
+          </div>
+
+          <label class="flex items-start gap-2 pt-1 cursor-pointer">
+            <input type="checkbox" id="consentRequired" class="mt-0.5 rounded text-teal-600 focus:ring-teal-500">
+            <span class="text-[11px] text-slate-800 font-medium leading-tight">
+              <span class="text-rose-500 font-bold">* บังคับ:</span> ข้าพเจ้าได้อ่านและให้ความยินยอมในการประมวลผลข้อมูลส่วนบุคคลเพื่อการบริหารจัดการทรัพย์สินของโรงพยาบาลหนองจิก
+            </span>
+          </label>
+          <label class="flex items-start gap-2 cursor-pointer">
+            <input type="checkbox" id="consentOptional" class="mt-0.5 rounded text-teal-600 focus:ring-teal-500">
+            <span class="text-[11px] text-slate-600 leading-tight">
+              ยินยอมให้ส่งการแจ้งเตือนสถานะงานซ่อมและการยืม-คืน ผ่านระบบอัตโนมัติ (LINE / Email)
+            </span>
+          </label>
+        </div>
+      </div>
+
+      <button onclick="handleRegisterPDPA()" class="w-full py-2.5 bg-teal-700 hover:bg-teal-800 text-white font-bold rounded-lg text-sm shadow transition">
+        ยืนยันการลงทะเบียนเข้าใช้งาน
+      </button>
+    </div>
+  </div>
+
+  <!-- ================= JAVASCRIPT LOGIC WITH EMBEDDED REAL DATA ================= -->
+  <script>
+    // ฐานข้อมูลครุภัณฑ์จริงของโรงพยาบาลหนองจิก (ฝังในตัว 100% ไม่ต้องพึ่งพาไฟล์ภายนอก)
+    const EMBEDDED_ASSETS = [
+      ["7440-001-0005/56","com",9000,"2006-03-07","COM-ศูนย์คอมพิวเตอร์","ใช้งานปกติ"],
+      ["7440-001-0005/57","คอมพิวเตอร์",38200,"2006-04-17","ยังไม่ระบุแผนก","ใช้งานปกติ"],
+      ["7440-001-0005/100","คอมพิวเตอร์+อุปกรณ์ Core i3-54",24900,"2011-06-07","XRA-งานรังสีวิทยา","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["6520-004-0001/3","เครื่องขูดหินปูน",47000,"1999-01-01","MRD-งานเวชระเบียน","ใช้งานปกติ"],
+      ["7440-001-0005/101","คอมพิวเตอร์+อุปกรณ์ Core i3-54",24900,"2011-06-07","XRA-งานรังสีวิทยา","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/102","คอมพิวเตอร์+อุปกรณ์ Core i3-54",24900,"2011-06-07","OPD-งานผู้ป่วยนอก","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/103","คอมพิวเตอร์+อุปกรณ์ Core i3-54",24900,"2011-06-07","MRD-งานเวชระเบียน","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/104","เครื่องคอมพิวเตอร์  Sever",53600,"2011-09-09","COM-ศูนย์คอมพิวเตอร์","ยังไม่สรุปสถานะ"],
+      ["7440-001-0005/105","เครื่องคอมพิวเตอร์+อุปกรณ์  AS",34900,"2012-07-02","ยังไม่ระบุแผนก","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/106","เครื่องคอมพิวเตอร์+อุปกรณ์  AS",24900,"2012-07-02","PSY-งานสุขภาพจิต","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/107","คอมพิวเตอร์+อุปกรณ์  Core  i3-",31000,"2012-09-17","ยังไม่ระบุแผนก","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/108","คอมพิวเตอร์+อุปกรณ์ (อัฟเกรด) ",15600,"2013-01-30","HAC-งานประกันสุขภาพ","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0001/109","อัฟเกรดคอมพิวเตอร์  ASUS  P8H6",13100,"2012-10-11","NCD-งานโรคเรื้อรัง","ใช้งานปกติ"],
+      ["7440-001-0005/110","อัฟเกรดคอมพิวเตอร์  ASUS  P8H6",13100,"2012-10-11","PSY-งานสุขภาพจิต","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/112","คอมพิวเตอร์+อุปกรณ์  Core i3-2",26000,"2013-03-01","FUN-งานทันตกรรม","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/113","คอมพิวเตอร์+อุปกรณ์  Core i3-2",26000,"2013-02-28","IPD1-งานหอผู้ป่วยใน","ใช้งานปกติ"],
+      ["7440-001-0005/116","อัฟเกรดคอมพิวเตอร์  ASUS  P8H6",13100,"2012-10-11","MRD-งานเวชระเบียน","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/117","อัฟเกรดคอมพิวเตอร์  ASUS  P8H6",13100,"2012-10-11","MRD-งานเวชระเบียน","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/118","คอมพิวเตอร์+อุปกรณ์  Core i3-2",26000,"2013-03-14","ยังไม่ระบุแผนก","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/119","คอมพิวเตอร์+อุปกรณ์  ครบชุด  C",28000,"2013-04-11","MAN-งานบริหารทั่วไป","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/120","คอมพิวเตอร์ครบชุด  ยี่ห้อ  Cor",26000,"2013-07-25","ยังไม่ระบุแผนก","ใช้งานปกติ"],
+      ["7440-001-0005/121","เครื่องคอมพิวเตอร์ครบชุด  รุ่น",26000,"2013-08-02","OBS-งานห้องคลอด","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/122","อัฟเกรดคอมพิวเตอร์",25000,"2014-08-14","PHA-งานเภสัชกรรมและคุ้มครองผู้บริโภค","ใช้งานปกติ"],
+      ["7440-001-0005/123","คอมพิวเตอร์  LENOVO Intel Core",27000,"2015-02-20","MAN-งานบริหารทั่วไป","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/124","คอมพิวเตอร์  All In One PC Del",30000,"2015-03-06","COM-ศูนย์คอมพิวเตอร์","ใช้งานปกติ"],
+      ["7440-001-0005/125","เครื่องคอมพิวเตอร์ครบชุด ASUS ",25000,"2015-03-31","FUN-งานทันตกรรม","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/126","คอมพิวเตอร์ครบชุด  LENOVO  ide",30000,"2015-05-11","PSY-งานสุขภาพจิต","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/127","เครื่องคอมพิวเตอร์ครบชุด  Inte",25000,"2015-07-09","NCD-งานโรคเรื้อรัง","ใช้งานปกติ"],
+      ["7440-001-0005/128","เครื่องคอมพิวเตอร์ครบชุด  CPU ",30000,"2015-08-28","COM-ศูนย์คอมพิวเตอร์","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/129","คอมพิวเตอร์ AIO LENOVO 700-241",30000,"2016-03-17","MAN-งานบริหารทั่วไป","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/130","คอมพิวเตอร์ AIO LENOVO 300-23I",23000,"2016-03-17","ยังไม่ระบุแผนก","ใช้งานปกติ"],
+      ["7440-001-0005/131","คอมพิวเตอร์ Set CPU Core I7-67",30000,"2016-03-24","OPD-งานผู้ป่วยนอก","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/132","Com AIO LENOVO C4030-F0B400XJT",22990,"2016-03-28","OBS-งานห้องคลอด","ใช้งานปกติ"],
+      ["7440-001-0005/133","Computer SET CPU Core I7-6700",29000,"2016-04-11","OPD-งานผู้ป่วยนอก","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/134","เครื่องคอมพิวเตอร์Lenovo",22000,"2016-05-18","BUD-งานการเงิน","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/135","เครื่องคอมพิวเตอร์ครบชุด รุ่น ",22000,"2016-05-18","FMC-ฝ่ายเวชปฎิบัติครอบครัว","ใช้งานปกติ"],
+      ["7440-001-0005/137","เครื่องคอมพิวเตอร์ครบชุด รุ่น ",22000,"2016-05-18","NCD-งานโรคเรื้อรัง","ใช้งานปกติ"],
+      ["7440-001-0005/138","Com AIO LENOVO 700-241SH SN:1S",28000,"2016-05-27","MAN-งานบริหารทั่วไป","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/139","เครื่องคอมพิวเตอร์ครบชุด COM A",22000,"2016-06-03","FMC-ฝ่ายเวชปฎิบัติครอบครัว","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/140","คอมพิวเตอร์พร้อมอ่านภาพเอกซเรย",69500,"2016-04-12","EMR-งานอุบัติเหตุฉุกเฉิน","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/141","Com AIO Asus-V220ICGKBC003M",22000,"2016-08-12","PSY-งานสุขภาพจิต","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/142","Comset HP 400G3 M4Z41AV S/N:SG",22000,"2016-09-13","MMU-งานโภชนาการ","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/43","Com AIO LENOVO S400Z-10HB004XT",22500,"2016-09-30","FUN-งานทันตกรรม","ใช้งานปกติ"],
+      ["7440-001-0005/144","Computer Set LENOVO",21000,"2017-01-23","TTM-งานแพทย์แผนไทย","ใช้งานปกติ"],
+      ["7440-001-0005/145","Computer Set LENOVO",22000,"2017-02-14","FMC-ฝ่ายเวชปฎิบัติครอบครัว","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/146","Computer Set LENOVO",22000,"2017-02-14","FMC-ฝ่ายเวชปฎิบัติครอบครัว","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/147","เครื่องคอมพิวเตอร์ครบชุด Com A",22000,"2017-04-28","MAN-งานบริหารทั่วไป","ใช้งานปกติ"],
+      ["7440-001-0005/148","เครื่องคอมพิวเตอร์ครบชุด Com A",22000,"2017-04-28","MAN-งานบริหารทั่วไป","ใช้งานปกติ"],
+      ["7440-001-0005/149","เครื่องคอมพิวเตอร์ครบชุด Com A",22000,"2017-04-28","BUD-งานการเงิน","ใช้งานปกติ"],
+      ["7440-001-0005/63","เครื่องคอมพิวเตอร์สำหรับสำรองข",24500,"2017-04-28","ยังไม่ระบุแผนก","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/152","เครื่องคอมพิวเตอร์ ประกอบด้วยC",22000,"2017-05-02","BUD-งานการเงิน","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/153","COMSET LEMEL PC-541170039 S/N-",29000,"2017-07-13","MRD-งานเวชระเบียน","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/154","COMSET HP 570-P050L(Z8H57AA#AK",21000,"2017-08-23","MAN-งานบริหารทั่วไป","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/155","Computer set-CPU Intel Core i5",22000,"2018-04-11","MAN-งานบริหารทั่วไป","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/156","Computer setCPU Intel Core i5",22000,"2018-04-11","LAB-งานเทคนิคการแพทย์","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/157","Computer set CPU Intel Core i5",22000,"2018-04-11","LAB-งานเทคนิคการแพทย์","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/158","Computer set-CPU Intel Core i5",22000,"2018-04-11","LAB-งานเทคนิคการแพทย์","ใช้งานปกติ"],
+      ["7440-001-0005/159","Computer setCPU Intel Core i5",22000,"2018-05-11","EMR-งานอุบัติเหตุฉุกเฉิน","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/160","Computer setCPU Intel Core i5",22000,"2018-05-11","EMR-งานอุบัติเหตุฉุกเฉิน","ใช้งานปกติ"],
+      ["7440-001-0005/161","Computer setCPU intel Core i5",22000,"2018-05-11","FMC-ฝ่ายเวชปฎิบัติครอบครัว","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/162","Computer setCPU Intel Core i5",22000,"2018-05-11","PAN-งานยุทธศาสตร์และศูนย์คุณภาพ","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/163","COM AIO LENOVO V410Z-10QV0028T",22000,"2018-05-24","BUD-งานการเงิน","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/164","COM AIO LENOVO V410Z-10QV0028T",22000,"2018-05-24","BUD-งานการเงิน","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/165","COM AIO LENOVO V410Z-10QV0028T",22000,"2018-05-25","BUD-งานการเงิน","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/166","COM AIO LENOVO V410Z-10QV0028T",22000,"2018-05-25","BUD-งานการเงิน","ใช้งานปกติ"],
+      ["7440-001-0005/167","Computer set",22000,"2018-08-10","FMC-ฝ่ายเวชปฎิบัติครอบครัว","ใช้งานปกติ"],
+      ["7440-001-0005/168","Computer set",22000,"2018-08-10","FMC-ฝ่ายเวชปฎิบัติครอบครัว","ใช้งานปกติ"],
+      ["7440-001-0005/169","Com puter set",22000,"2018-08-27","FMC-ฝ่ายเวชปฎิบัติครอบครัว","ใช้งานปกติ"],
+      ["7440-001-0005/170","Computer set",22000,"2018-08-27","FUN-งานทันตกรรม","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/171","เครื่องคอมพิวเตอร์ LENOVO",22000,"2018-08-27","PHA-งานเภสัชกรรมและคุ้มครองผู้บริโภค","ใช้งานปกติ"],
+      ["7440-001-0005/173","เครื่องคอมพิวเตอร์ LENOVO",22000,"2018-08-27","PHA-งานเภสัชกรรมและคุ้มครองผู้บริโภค","ใช้งานปกติ"],
+      ["7440-001-0005/174","เครื่องคอมพิวเตอร์ LENOVO",22000,"2018-08-27","PSY-งานสุขภาพจิต","จำหน่ายแล้ว/ยกเลิกการใช้"],
+      ["7440-001-0005/175","Computer All In One Lenovo 520",23000,"2019-06-10","PHA-งานเภสัชกรรมและคุ้มครองผู้บริโภค","ใช้งานปกติ"],
+      ["4140-001-0001/18","พัดลมตั้งพื้น 16 นิ้ว Hatari",1400,"2003-02-12","AMB-งานยานพาหนะ","ใช้งานปกติ"],
+      ["6515-070-0002/22","เครื่องวัดออกซิเจนในเลือดอัตโนมัติชนิดพกพา",24950,"2024-12-11","OPD-งานผู้ป่วยนอก","ใช้งานปกติ"],
+      ["7440-009-0009/2","UBIQUITI UNIFI AP AC LR PACK 5",23000,"2017-05-14","COM-ศูนย์คอมพิวเตอร์","ใช้งานปกติ"],
+      ["6515-038-0007/4","เครืองติดตามสัญญาณชีพ",170000,"2011-07-14","CLC-งานจ่ายกลาง","ใช้งานปกติ"],
+      ["6530-003-0001/4","เครื่องนึ่งฆ่าเชื้ออัตโนมัติ",700000,"2012-08-07","CLC-งานจ่ายกลาง","ใช้งานปกติ"],
+      ["6520-007-0001/7","ยูนิตทันตกรรม",549000,"2018-08-10","MRD-งานเวชระเบียน","ใช้งานปกติ"],
+      ["6525-022-0001","เครื่องอ่านเอกซเรย์และแปลงสัญญาณภาพ",4046000,"2012-07-04","HAC-งานประกันสุขภาพ","ใช้งานปกติ"],
+      ["2310-001-0002/6","รถพยาบาลพร้อมอุปกรณ์ช่วยชีวิตชั้นสูง (มาตรฐานความปลอดภัย 10 G)",2500000,"2022-04-01","MAN-งานบริหารทั่วไป","ใช้งานปกติ"],
+      ["6515-030-0016/2","เครื่องติดตามการทำงานของหัวใจและสัญญาณชีพ4พารามิเตอร์ระบบรวมศูนย์ไม่น้อยกว่า 4 เตียง",1000000,"2025-10-10","EMR-งานอุบัติเหตุฉุกเฉิน","ใช้งานปกติ"],
+      ["6530-001-0003/35","เตียงผู้ป่วยชนิดสามไกร์ราวปีกนก พร้อมเบาะและเสาน้ำเกลือ",33000,"2024-11-26","IPD1-งานหอผู้ป่วยใน","ใช้งานปกติ"],
+      ["6530-001-0010/8","เตียงผู้ป่วยชนิดสามไกร์ปรับด้วยไฟฟ้าราวปีกนกพร้อมเบาะและเสาน้ำเกลือ",55000,"2024-11-26","OBS-งานห้องคลอด","ใช้งานปกติ"],
+      ["7440-001-0005/328","เครื่องคอมพิวเตอร์ All In One ยี่ห้อ Acer รุ่น C24-2YE13",24000,"2025-09-11","FMC-ฝ่ายเวชปฎิบัติครอบครัว","ใช้งานปกติ"],
+      ["7440-001-0005/329","เครื่องคอมพิวเตอร์ All In One ยี่ห้อ Acer รุ่น C24-2YE13",24000,"2025-09-11","FMC-ฝ่ายเวชปฎิบัติครอบครัว","ใช้งานปกติ"],
+      ["7440-001-0005/330","เครื่องคอมพิวเตอร์ All In One ยี่ห้อ Acer รุ่น C24-2YE13",24000,"2025-09-11","PSY-งานสุขภาพจิต","ใช้งานปกติ"],
+      ["6515-097-0001/45","เครื่องควบคุมการไหลสารละลาย infusion pump",50000,"2026-06-30","IPD1-งานหอผู้ป่วยใน","ใช้งานปกติ"],
+      ["6515-038-0007/26","เครื่องวัดความดันอัตโนมัติพร้อมวัดความเข้มข้นออกซิเจนเลือด สำหรับทารกแรกเกิด",100000,"2026-04-17","OPD-งานผู้ป่วยนอก","ใช้งานปกติ"],
+      ["6525-006-0001/8","เครื่องตรวจอวัยวะภายในด้วยเคลื่อนความถี่สูงชนิด 2 หัว",930000,"2025-05-01","EMR-งานอุบัติเหตุฉุกเฉิน","ใช้งานปกติ"],
+      ["6530-004-0003/9","เครื่องกระตุ้นระบบประสาทด้วยการใช้คลื่นแม่เหล็กไฟฟ้า",900000,"2025-09-29","PTD-งานกายภาพ","ใช้งานปกติ"],
+      ["4120-001-0004/18","เครื่องปรับอากาศ ชนิดตั้งแขวน 18,800 BTU",26500,"2025-06-27","PSY-งานสุขภาพจิต","ใช้งานปกติ"],
+      ["6115-001-0013","ระบบผลิตไฟฟ้าแสงอาทิตย์",2999392,"2024-01-02","EMR-งานอุบัติเหตุฉุกเฉิน","ใช้งานปกติ"],
+      ["7440-014-0001/2","อุปกรณ์สำหรับจัดเก็บข้อมูลแบบ NAS",71900,"2026-09-04","COM-ศูนย์คอมพิวเตอร์","ใช้งานปกติ"],
+      ["7110-001-0006/47","ตู้ลอยวางแฟ้ม",24000,"2026-03-13","ART-งานพัสดุ","ใช้งานปกติ"],
+      ["0000-000-0013","อาคารผู้ป่วยนอก -คอนกรีต 1 ชั้น แบบ 6168/2536",7200000,"1993-01-01","OPD-งานผู้ป่วยนอก","ใช้งานปกติ"],
+      ["0000-000-0014/1","อาคารผู้ป่วยใน-คอนกรีต 1 ชั้น (30 เตียง) แบบ 2731/2530",5350000,"1990-01-01","IPD1-งานหอผู้ป่วยใน","ใช้งานปกติ"],
+      ["0000-000-0021/1","แฟลตพยาบาล-จำนวน 12 ห้อง (แฟลต2)",8008500,"2015-01-01","MAN-งานบริหารทั่วไป","ใช้งานปกติ"],
+      ["6515-069-0003/65","เครื่องวัดความดัน  ตั้งโต๊ะ",1092566,"2023-09-01","NSO-งานบริหารการพยาบาล","ใช้งานปกติ"],
+      ["6525-004-0002/1","เครื่องเอกซเรย์ ขนาดไม่น้อยกว่า 500mA",1760000,"2019-09-11","XRA-งานรังสีวิทยา","ใช้งานปกติ"],
+      ["6115-001-0015/1","เครื่องกำเนิดไฟฟ้า ขนาด 300 กิโลวัตต์",1760000,"2008-12-24","MAN-งานบริหารทั่วไป","ใช้งานปกติ"],
+      ["2310-001-0002/3","รถยนต์พยาบาลพร้อมอุปกรณ์การแพทย์ กบ5260",1467000,"2006-05-04","MAN-งานบริหารทั่วไป","ใช้งานปกติ"],
+      ["2310-003-0002/2","รถยนต์โดยสารไม่น้อยกว่า 11 ที่นั่ง",1472000,"2006-10-06","MAN-งานบริหารทั่วไป","ใช้งานปกติ"],
+      ["2310-003-0008/1","รถยนต์ตู้ 16 ที่นั่ง รุ่น Commuter",1155000,"2009-10-28","MAN-งานบริหารทั่วไป","ใช้งานปกติ"],
+      ["6525-004-0011/1","เครื่องเอ็กซเรย์เคลื่อนที่ขนาดไม่น้อยกว่า 300 MA ขับเคลื่อนด้วยมอเตอร์ไฟฟ้า",1298500,"2021-09-19","XRA-งานรังสีวิทยา","ใช้งานปกติ"]
+    ];
+
+    let assetsData = [];
+    let currentPage = 1;
+    const pageSize = 15;
+    let selectedAsset = null;
+    let currentUser = JSON.parse(localStorage.getItem('nongchik_user')) || null;
+    let repairTickets = JSON.parse(localStorage.getItem('nongchik_tickets')) || [];
+    let assetTransfers = JSON.parse(localStorage.getItem('nongchik_transfers')) || [];
+    let html5QrScanner = null;
+    let isAuditScanMode = false;
+    let auditSession = { dept: '', found: new Set(), misplaced: new Set() };
+
+    const hospitalDepts = [
+      "ANC-ฝากครรภ์", "ARV-งานยาเสพติด", "ART-งานพัสดุ", "AMB-งานยานพาหนะ", 
+      "BOO-งานธุรการ", "BUD-งานการเงิน", "CAL-งานซ่อมบำรุง", "CLC-งานจ่ายกลาง", 
+      "COM-ศูนย์คอมพิวเตอร์", "DOC-องค์กรแพทย์", "EMR-งานอุบัติเหตุฉุกเฉิน", 
+      "FUN-งานทันตกรรม", "FMC-ฝ่ายเวชปฎิบัติครอบครัว", "HAC-งานประกันสุขภาพ", 
+      "IC-งานควบคุมการติดเชื้อ", "IPD1-งานหอผู้ป่วยใน", "LAB-งานเทคนิคการแพทย์", 
+      "MAN-งานบริหารทั่วไป", "MMU-งานโภชนาการ", "MRD-งานเวชระเบียน", 
+      "NCD-งานโรคเรื้อรัง", "NSO-งานบริหารการพยาบาล", "OBS-งานห้องคลอด", 
+      "OPD-งานผู้ป่วยนอก", "PAN-งานยุทธศาสตร์และศูนย์คุณภาพ", "PHA-งานเภสัชกรรมและคุ้มครองผู้บริโภค", 
+      "PR-งานประชาสัมพันธ์", "PTD-งานกายภาพ", "PSY-งานสุขภาพจิต", "SAN-งานสุขาภิบาล", 
+      "TTM-งานแพทย์แผนไทย", "XRA-งานรังสีวิทยา", "RPST-เครือข่าย รพ.สต. หนองจิก", "SSO-สำนักงานสาธารณสุขหนองจิก"
+    ];
+
+    function initData() {
+      const deptFilter = document.getElementById('deptFilter');
+      const regDept = document.getElementById('regDept');
+      const transferToDept = document.getElementById('transferToDept');
+      const auditDeptSelect = document.getElementById('auditDeptSelect');
+      const batchPrintDeptSelect = document.getElementById('batchPrintDeptSelect');
+
+      hospitalDepts.forEach(d => {
+        deptFilter.innerHTML += `<option value="${d}">${d}</option>`;
+        regDept.innerHTML += `<option value="${d}">${d}</option>`;
+        transferToDept.innerHTML += `<option value="${d}">${d}</option>`;
+        auditDeptSelect.innerHTML += `<option value="${d}">${d}</option>`;
+        batchPrintDeptSelect.innerHTML += `<option value="${d}">${d}</option>`;
+      });
+
+      // Load cached or embedded
+      const cached = localStorage.getItem('nongchik_custom_assets');
+      if (cached) {
+        assetsData = JSON.parse(cached);
+      } else {
+        assetsData = EMBEDDED_ASSETS.map(r => ({
+          code: r[0],
+          name: r[1],
+          price: r[2],
+          date: r[3],
+          dept: r[4] || "ยังไม่ระบุแผนก",
+          status: r[5] || "ใช้งานปกติ"
+        }));
+      }
+
+      updateStats();
+      renderTable();
+      updateUserUI();
+      renderTickets();
+      renderTransfers();
+      renderAnalytics();
+    }
+
+    // CSV File Reader (Drag & Drop or File Select)
+    function handleCSVUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const text = e.target.result;
+        const lines = text.split('\n').filter(l => l.trim().length > 0);
+        const parsed = [];
+
+        for (let i = 1; i < lines.length; i++) {
+          const cols = lines[i].split(',').map(s => s.trim().replace(/^"|"$/g, ''));
+          if (cols.length >= 6) {
+            parsed.push({
+              code: cols[0],
+              name: cols[1],
+              price: parseFloat(cols[2]) || 0,
+              date: cols[3],
+              dept: cols[4] || "ยังไม่ระบุแผนก",
+              status: cols[5] || "ใช้งานปกติ"
+            });
+          }
+        }
+
+        if (parsed.length > 0) {
+          assetsData = parsed;
+          localStorage.setItem('nongchik_custom_assets', JSON.stringify(assetsData));
+          alert(`นำเข้าครุภัณฑ์โรงพยาบาลหนองจิกเรียบร้อย จำนวน ${parsed.length.toLocaleString()} รายการ`);
+          updateStats();
+          renderTable();
+          renderAnalytics();
+        } else {
+          alert("ไม่พบรูปแบบข้อมูลที่ถูกต้องในไฟล์ CSV");
+        }
+      };
+      reader.readAsText(file, "UTF-8");
+    }
+
+    function updateStats() {
+      document.getElementById('statTotal').innerText = assetsData.length.toLocaleString();
+      document.getElementById('statActive').innerText = assetsData.filter(a => a.status === 'ใช้งานปกติ').length.toLocaleString();
+      document.getElementById('statDisposed').innerText = assetsData.filter(a => a.status.includes('จำหน่าย')).length.toLocaleString();
+      const totalVal = assetsData.reduce((sum, a) => sum + (Number(a.price) || 0), 0);
+      document.getElementById('statValue').innerText = totalVal.toLocaleString() + " ฿";
+    }
+
+    function getFilteredData() {
+      const q = document.getElementById('searchInput').value.toLowerCase().trim();
+      const dept = document.getElementById('deptFilter').value;
+      const status = document.getElementById('statusFilter').value;
+
+      return assetsData.filter(item => {
+        const matchQ = !q || item.code.toLowerCase().includes(q) || item.name.toLowerCase().includes(q);
+        const matchDept = !dept || item.dept === dept;
+        const matchStatus = !status || item.status === status;
+        return matchQ && matchDept && matchStatus;
+      });
+    }
+
+    function renderTable() {
+      const data = getFilteredData();
+      document.getElementById('showingCount').innerText = data.length.toLocaleString();
+      const totalPages = Math.ceil(data.length / pageSize) || 1;
+      if (currentPage > totalPages) currentPage = totalPages;
+
+      const start = (currentPage - 1) * pageSize;
+      const paginated = data.slice(start, start + pageSize);
+
+      const tbody = document.getElementById('assetTableBody');
+      tbody.innerHTML = '';
+
+      if (paginated.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="py-8 text-center text-slate-400">ไม่พบข้อมูลครุภัณฑ์ที่ค้นหา</td></tr>`;
+        return;
+      }
+
+      paginated.forEach(a => {
+        let statusBadge = "badge-ok";
+        if (a.status.includes('จำหน่าย')) statusBadge = "badge-discard";
+        else if (a.status.includes('รอจำหน่าย') || a.status.includes('ซ่อม')) statusBadge = "badge-repair";
+        else if (a.status.includes('ยืม')) statusBadge = "badge-transfer";
+
+        tbody.innerHTML += `
+          <tr class="hover:bg-slate-50/80 transition cursor-pointer" onclick="openAssetDetail('${a.code}')">
+            <td class="py-3 px-4 font-mono font-semibold text-teal-700 text-xs">${a.code}</td>
+            <td class="py-3 px-4 font-medium text-slate-900">${a.name}</td>
+            <td class="py-3 px-4 text-slate-600 text-xs">${a.dept}</td>
+            <td class="py-3 px-4 font-mono text-slate-700 text-xs">${Number(a.price).toLocaleString()} ฿</td>
+            <td class="py-3 px-4 text-slate-500 text-xs">${a.date || '-'}</td>
+            <td class="py-3 px-4"><span class="px-2 py-0.5 rounded-full text-[11px] font-semibold ${statusBadge}">${a.status}</span></td>
+            <td class="py-3 px-4 text-center">
+              <button class="text-teal-600 hover:text-teal-800 p-1"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+            </td>
+          </tr>
+        `;
+      });
+
+      document.getElementById('pageInfo').innerText = `หน้าที่ ${currentPage} จาก ${totalPages}`;
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function prevPage() { if (currentPage > 1) { currentPage--; renderTable(); } }
+    function nextPage() { 
+      const total = Math.ceil(getFilteredData().length / pageSize);
+      if (currentPage < total) { currentPage++; renderTable(); }
+    }
+
+    function openAssetDetail(code) {
+      selectedAsset = assetsData.find(a => a.code === code);
+      if (!selectedAsset) return;
+
+      document.getElementById('modalAssetName').innerText = selectedAsset.name;
+      document.getElementById('modalAssetCode').innerText = "รหัส: " + selectedAsset.code;
+      document.getElementById('modalAssetDept').innerText = selectedAsset.dept;
+      document.getElementById('modalAssetPrice').innerText = Number(selectedAsset.price).toLocaleString() + " บาท";
+      document.getElementById('modalAssetDate').innerText = selectedAsset.date || "ไม่ระบุ";
+      
+      const stEl = document.getElementById('modalAssetStatus');
+      stEl.innerText = selectedAsset.status;
+      stEl.className = "inline-block text-xs px-2.5 py-0.5 rounded-full font-medium mb-1.5 " + 
+        (selectedAsset.status.includes('จำหน่าย') ? 'badge-discard' : 'badge-ok');
+
+      const qrBox = document.getElementById('assetQrBox');
+      qrBox.innerHTML = '';
+      new QRCode(qrBox, {
+        text: `https://nongchik-asset.web.app/scan/${selectedAsset.code}`,
+        width: 80,
+        height: 80
+      });
+
+      document.getElementById('assetDetailModal').classList.remove('hidden');
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+    // Inter-Department Transfer
+    function openTransferModal() {
+      if (!currentUser) {
+        alert("กรุณาลงทะเบียนหรือเข้าสู่ระบบตามกฎหมาย PDPA ก่อนทำรายการยืม-ย้ายครับ");
+        openAuthModal();
+        return;
+      }
+      closeModal('assetDetailModal');
+      document.getElementById('transferAssetName').innerText = `${selectedAsset.name} (${selectedAsset.code})`;
+      document.getElementById('transferModal').classList.remove('hidden');
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function submitTransfer() {
+      const toDept = document.getElementById('transferToDept').value;
+      const type = document.getElementById('transferType').value;
+      const reason = document.getElementById('transferReason').value.trim();
+
+      if (!toDept) return alert("กรุณาเลือกแผนกปลายทาง");
+      if (toDept === selectedAsset.dept) return alert("แผนกปลายทางต้องไม่ซ้ำกับแผนกเดิม");
+
+      const transferRecord = {
+        id: "TR-" + Date.now().toString().slice(-4),
+        assetCode: selectedAsset.code,
+        assetName: selectedAsset.name,
+        fromDept: selectedAsset.dept,
+        toDept: toDept,
+        type: type,
+        reason: reason || "ใช้งานราชการ",
+        requester: currentUser.name,
+        date: new Date().toLocaleDateString('th-TH')
+      };
+
+      assetTransfers.unshift(transferRecord);
+      localStorage.setItem('nongchik_transfers', JSON.stringify(assetTransfers));
+
+      if (type === 'โอนย้ายสิทธิ์ถาวร') {
+        selectedAsset.dept = toDept;
+      } else {
+        selectedAsset.status = `ยืมโดย ${toDept.split('-')[0]}`;
+      }
+
+      closeModal('transferModal');
+      alert(`บันทึกการ ${type} ไปยัง [${toDept}] เรียบร้อยแล้ว`);
+      renderTable();
+      renderTransfers();
+    }
+
+    function renderTransfers() {
+      const list = document.getElementById('transfersList');
+      const badge = document.getElementById('transferBadge');
+      if (assetTransfers.length > 0) {
+        badge.innerText = assetTransfers.length;
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
+
+      list.innerHTML = assetTransfers.length === 0
+        ? `<p class="text-sm text-slate-400 text-center py-8">ไม่มีรายการยืม-คืนหรือโอนย้าย</p>`
+        : assetTransfers.map(t => `
+          <div class="border border-slate-200 p-4 rounded-xl flex items-start justify-between bg-slate-50">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="font-mono font-bold text-xs bg-cyan-100 text-cyan-800 px-2 py-0.5 rounded">${t.id}</span>
+                <span class="text-xs font-semibold text-slate-700">${t.type}</span>
+                <span class="text-xs text-slate-500 font-light">${t.date}</span>
+              </div>
+              <p class="font-semibold text-sm text-slate-800 mt-1">${t.assetName} (${t.assetCode})</p>
+              <p class="text-xs text-slate-600 mt-0.5">จาก <strong>${t.fromDept}</strong> ➔ ไปยัง <strong>${t.toDept}</strong></p>
+              <p class="text-xs text-slate-500 mt-0.5">ผู้ทำรายการ: ${t.requester} (${t.reason})</p>
+            </div>
+            <button onclick="returnAsset('${t.assetCode}', '${t.fromDept}')" class="text-xs bg-white hover:bg-slate-100 border border-slate-300 px-3 py-1.5 rounded-lg text-slate-700 font-medium shadow-sm transition">
+              ส่งคืนตึกเดิม
+            </button>
+          </div>
+        `).join('');
+    }
+
+    function returnAsset(code, originalDept) {
+      const asset = assetsData.find(a => a.code === code);
+      if (asset) {
+        asset.dept = originalDept;
+        asset.status = "ใช้งานปกติ";
+        alert(`รับคืนครุภัณฑ์ ${asset.name} กลับสู่ [${originalDept}] เรียบร้อย`);
+        renderTable();
+        renderTransfers();
+      }
+    }
+
+    // QR Scanner
+    function openScannerModal(isAudit = false) {
+      isAuditScanMode = isAudit;
+      document.getElementById('scannerModal').classList.remove('hidden');
+      document.getElementById('scanInstruction').innerText = isAudit 
+        ? "⚡ กำลังอยู่ในโหมดตรวจนับสต๊อก: สแกนครุภัณฑ์ในห้องนี้ต่อเนื่องได้ทันที"
+        : "ส่องกล้องไปที่ QR Code บนสติกเกอร์ที่ติดอยู่กับตัวเครื่อง";
+
+      html5QrScanner = new Html5Qrcode("qrReader");
+      html5QrScanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 220, height: 220 } },
+        (decodedText) => {
+          const parts = decodedText.split('/');
+          const code = parts[parts.length - 1];
+          const found = assetsData.find(a => a.code.includes(code));
+
+          if (isAuditScanMode) {
+            handleAuditScannedAsset(found, decodedText);
+          } else {
+            closeScannerModal();
+            if (found) openAssetDetail(found.code);
+            else alert("พบรหัส QR: " + decodedText);
+          }
+        },
+        (error) => {}
+      ).catch(err => {
+        console.warn("กล้องไม่พร้อมใช้งาน หรือไม่ได้รับอนุญาต:", err);
+      });
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function closeScannerModal() {
+      if (html5QrScanner) {
+        html5QrScanner.stop().then(() => { html5QrScanner.clear(); });
+      }
+      closeModal('scannerModal');
+    }
+
+    // Annual Stock Audit
+    function initAuditSession() {
+      const dept = document.getElementById('auditDeptSelect').value;
+      if (!dept) {
+        document.getElementById('auditProgressBox').classList.add('hidden');
+        return;
+      }
+      auditSession = { dept: dept, found: new Set(), misplaced: new Set() };
+      document.getElementById('auditProgressBox').classList.remove('hidden');
+      updateAuditUI();
+    }
+
+    function handleAuditScannedAsset(asset, rawText) {
+      const logs = document.getElementById('auditScanLogs');
+      if (!asset) {
+        logs.innerHTML = `<div class="p-2 bg-rose-50 text-rose-700 rounded mb-1">❌ ไม่พบรหัสในฐานข้อมูล: ${rawText}</div>` + logs.innerHTML;
+        return;
+      }
+
+      if (asset.dept === auditSession.dept) {
+        auditSession.found.add(asset.code);
+        logs.innerHTML = `<div class="p-2 bg-emerald-50 text-emerald-800 rounded mb-1">✅ <strong>ถูกต้อง:</strong> ${asset.name} (${asset.code})</div>` + logs.innerHTML;
+      } else {
+        auditSession.misplaced.add(asset.code);
+        logs.innerHTML = `<div class="p-2 bg-amber-50 text-amber-800 rounded mb-1">⚠️ <strong>พบแต่ผิดตึก:</strong> ${asset.name} (${asset.code}) สังกัดเดิมคือ [${asset.dept}]</div>` + logs.innerHTML;
+      }
+      updateAuditUI();
+    }
+
+    function updateAuditUI() {
+      const deptAssets = assetsData.filter(a => a.dept === auditSession.dept);
+      const totalExpected = deptAssets.length;
+      const foundCount = auditSession.found.size;
+      const missingCount = Math.max(0, totalExpected - foundCount);
+
+      document.getElementById('auditFoundCount').innerText = foundCount;
+      document.getElementById('auditMisplacedCount').innerText = auditSession.misplaced.size;
+      document.getElementById('auditMissingCount').innerText = missingCount;
+    }
+
+    // Batch QR Label Printing
+    function openBatchPrintModal() {
+      document.getElementById('batchPrintModal').classList.remove('hidden');
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function generateBatchStickers() {
+      const dept = document.getElementById('batchPrintDeptSelect').value;
+      const limit = document.getElementById('batchPrintLimit').value;
+      closeModal('batchPrintModal');
+
+      let targets = dept ? assetsData.filter(a => a.dept === dept) : assetsData;
+      if (limit !== 'all') {
+        targets = targets.slice(0, parseInt(limit));
+      }
+
+      if (targets.length === 0) return alert("ไม่พบครุภัณฑ์ในเงื่อนไขที่เลือก");
+
+      const grid = document.getElementById('batchStickersGrid');
+      grid.innerHTML = '';
+
+      targets.forEach((a, idx) => {
+        const qrId = `batch_qr_${idx}`;
+        const card = document.createElement('div');
+        card.className = "border border-dashed border-slate-400 p-2 text-center rounded flex flex-col items-center justify-between text-[10px]";
+        card.innerHTML = `
+          <div class="font-bold text-teal-800 text-[11px]">🏥 รพ.หนองจิก</div>
+          <div id="${qrId}" class="my-1"></div>
+          <div class="font-mono font-bold text-slate-800">${a.code}</div>
+          <div class="truncate w-full font-medium">${a.name}</div>
+          <div class="text-slate-500 text-[9px]">${a.dept}</div>
+        `;
+        grid.appendChild(card);
+
+        setTimeout(() => {
+          new QRCode(document.getElementById(qrId), {
+            text: `https://nongchik-asset.web.app/scan/${a.code}`,
+            width: 70,
+            height: 70
+          });
+        }, 50);
+      });
+
+      setTimeout(() => {
+        window.print();
+      }, 500);
+    }
+
+    function printSingleQrSticker() {
+      if (!selectedAsset) return;
+      const win = window.open('', '_blank');
+      win.document.write(`
+        <html>
+        <head>
+          <title>สติกเกอร์ครุภัณฑ์ - ${selectedAsset.code}</title>
+          <style>
+            body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+            .sticker { border: 2px dashed #000; padding: 15px; width: 320px; border-radius: 8px; text-align: center; }
+            .hosp { font-size: 14px; font-weight: bold; margin-bottom: 4px; color: #047857; }
+            .code { font-size: 16px; font-weight: bold; font-family: monospace; margin: 8px 0; }
+            .name { font-size: 12px; margin-bottom: 6px; }
+            .dept { font-size: 11px; color: #4b5563; }
+          </style>
+        </head>
+        <body onload="window.print()">
+          <div class="sticker">
+            <div class="hosp">🏥 โรงพยาบาลหนองจิก</div>
+            <div id="printQr"></div>
+            <div class="code">${selectedAsset.code}</div>
+            <div class="name">${selectedAsset.name}</div>
+            <div class="dept">สังกัด: ${selectedAsset.dept}</div>
+          </div>
+          <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
+          <script>
+            new QRCode(document.getElementById('printQr'), { text: 'https://nongchik-asset.web.app/scan/${selectedAsset.code}', width: 120, height: 120 });
+          <\/script>
+        </body>
+        </html>
+      `);
+      win.document.close();
+    }
+
+    // Repair Tickets
+    function openRepairModal() {
+      if (!currentUser) {
+        alert("กรุณาลงทะเบียนหรือเข้าสู่ระบบตามกฎหมาย PDPA ก่อนแจ้งซ่อมครับ");
+        openAuthModal();
+        return;
+      }
+      closeModal('assetDetailModal');
+      document.getElementById('repairModal').classList.remove('hidden');
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function submitRepairTicket() {
+      const issue = document.getElementById('repairIssue').value.trim();
+      const urgency = document.getElementById('repairUrgency').value;
+      if (!issue) return alert("กรุณาระบุอาการชำรุด");
+
+      const targetTeam = selectedAsset.code.startsWith('7440') ? 'COM-ศูนย์คอมพิวเตอร์' : 'CAL-งานซ่อมบำรุง';
+
+      const ticket = {
+        id: "TICK-" + Date.now().toString().slice(-4),
+        assetCode: selectedAsset.code,
+        assetName: selectedAsset.name,
+        fromDept: selectedAsset.dept,
+        assignedTo: targetTeam,
+        issue: issue,
+        urgency: urgency,
+        status: "แจ้งซ่อม",
+        reporter: currentUser.name,
+        date: new Date().toLocaleDateString('th-TH')
+      };
+
+      repairTickets.unshift(ticket);
+      localStorage.setItem('nongchik_tickets', JSON.stringify(repairTickets));
+      closeModal('repairModal');
+      document.getElementById('repairIssue').value = '';
+      alert(`ส่งใบแจ้งซ่อมเรียบร้อย! ส่งเรื่องไปยัง [${targetTeam}]`);
+      renderTickets();
+    }
+
+    function updateTicketStatus(ticketId, newStatus) {
+      const t = repairTickets.find(item => item.id === ticketId);
+      if (t) {
+        t.status = newStatus;
+        localStorage.setItem('nongchik_tickets', JSON.stringify(repairTickets));
+        alert(`อัปเดตสถานะตั๋ว ${ticketId} เป็น [${newStatus}]`);
+        renderTickets();
+      }
+    }
+
+    function renderTickets() {
+      const list = document.getElementById('ticketsList');
+      const badge = document.getElementById('ticketCountBadge');
+      if (repairTickets.length > 0) {
+        badge.innerText = repairTickets.length;
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
+
+      list.innerHTML = repairTickets.length === 0 
+        ? `<p class="text-sm text-slate-400 text-center py-8">ไม่มีรายการแจ้งซ่อมที่รอดำเนินการ</p>`
+        : repairTickets.map(t => `
+          <div class="border border-slate-200 p-4 rounded-xl flex flex-wrap items-start justify-between gap-3 bg-slate-50">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="font-mono font-bold text-xs bg-slate-200 px-2 py-0.5 rounded">${t.id}</span>
+                <span class="text-xs px-2 py-0.5 rounded-full font-semibold ${t.urgency === 'ด่วนวิกฤต' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}">${t.urgency}</span>
+                <span class="text-xs text-slate-500 font-light">${t.date}</span>
+              </div>
+              <p class="font-semibold text-sm text-slate-800 mt-1">${t.assetName} (${t.assetCode})</p>
+              <p class="text-xs text-slate-600 mt-0.5">อาการ: ${t.issue}</p>
+              <p class="text-xs text-teal-700 mt-1">ผู้รับผิดชอบ: <strong>${t.assignedTo}</strong> | ผู้แจ้ง: ${t.reporter} (${t.fromDept})</p>
+            </div>
+            
+            <div class="flex items-center gap-2">
+              <span class="bg-blue-100 text-blue-800 text-xs px-2.5 py-1 rounded-full font-medium mr-2">${t.status}</span>
+              <select onchange="updateTicketStatus('${t.id}', this.value)" class="text-xs border rounded-lg p-1.5 bg-white font-medium text-slate-700">
+                <option value="">-- เปลี่ยนสถานะ --</option>
+                <option value="ช่างรับเรื่อง">ช่างรับเรื่อง</option>
+                <option value="กำลังดำเนินการ/รออะไหล่">รออะไหล่</option>
+                <option value="ซ่อมเสร็จพร้อมใช้">ซ่อมเสร็จ</option>
+                <option value="ไม่คุ้มซ่อม/ส่งแทงจำหน่าย">ส่งแทงจำหน่าย</option>
+              </select>
+            </div>
+          </div>
+        `).join('');
+    }
+
+    function renderAnalytics() {
+      const deptSums = {};
+      let old10 = 0, old5to10 = 0, new5 = 0;
+      const currentYear = new Date().getFullYear();
+
+      assetsData.forEach(a => {
+        deptSums[a.dept] = (deptSums[a.dept] || 0) + (Number(a.price) || 0);
+
+        if (a.date) {
+          const year = parseInt(a.date.split('-')[0]);
+          if (year) {
+            const age = currentYear - year;
+            if (age > 10) old10++;
+            else if (age >= 5) old5to10++;
+            else new5++;
+          }
+        }
+      });
+
+      document.getElementById('statOld10').innerText = `${old10.toLocaleString()} ชิ้น`;
+      document.getElementById('statOld5to10').innerText = `${old5to10.toLocaleString()} ชิ้น`;
+      document.getElementById('statNew5').innerText = `${new5.toLocaleString()} ชิ้น`;
+
+      const sorted = Object.entries(deptSums).sort((a,b) => b[1] - a[1]).slice(0, 5);
+      const maxVal = sorted[0] ? sorted[0][1] : 1;
+      const barContainer = document.getElementById('topDeptBars');
+      barContainer.innerHTML = sorted.map(([dept, val]) => {
+        const pct = Math.round((val / maxVal) * 100);
+        return `
+          <div>
+            <div class="flex justify-between font-medium mb-1">
+              <span class="truncate max-w-[200px]">${dept}</span>
+              <span class="font-mono font-bold text-teal-700">${val.toLocaleString()} ฿</span>
+            </div>
+            <div class="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+              <div class="bg-teal-600 h-full rounded-full" style="width: ${pct}%"></div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function exportToCSV() {
+      const data = getFilteredData();
+      if (data.length === 0) return alert("ไม่มีข้อมูลสำหรับการส่งออก");
+
+      let csv = "\uFEFF";
+      csv += "เลขครุภัณฑ์,ชื่อรายการครุภัณฑ์,ราคาจัดซื้อ,วันที่ได้มา,แผนกที่ครองครอง,สถานะ\n";
+      data.forEach(d => {
+        csv += `"${d.code}","${d.name}",${d.price},"${d.date}","${d.dept}","${d.status}"\n`;
+      });
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `รายงานครุภัณฑ์_รพ_หนองจิก_${new Date().toISOString().slice(0,10)}.csv`;
+      a.click();
+    }
+
+    function openAuthModal() {
+      document.getElementById('authModal').classList.remove('hidden');
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function handleRegisterPDPA() {
+      const name = document.getElementById('regFullName').value.trim();
+      const dept = document.getElementById('regDept').value;
+      const phone = document.getElementById('regPhone').value.trim();
+      const email = document.getElementById('regEmail').value.trim();
+      const reqConsent = document.getElementById('consentRequired').checked;
+      const optConsent = document.getElementById('consentOptional').checked;
+
+      if (!name || !email) return alert("กรุณากรอกชื่อและอีเมลให้ครบถ้วน");
+      if (!reqConsent) return alert("กรุณายอมรับข้อกำหนด PDPA เพื่อใช้งานระบบของทางราชการ");
+
+      currentUser = {
+        name: name,
+        dept: dept,
+        phone: phone,
+        email: email,
+        pdpaConsent: {
+          version: "1.0",
+          agreedAt: new Date().toISOString(),
+          optionalNoti: optConsent
+        }
+      };
+
+      localStorage.setItem('nongchik_user', JSON.stringify(currentUser));
+      updateUserUI();
+      closeModal('authModal');
+      alert(`ยินดีต้อนรับ ${name} (${dept}) เข้าสู่ระบบพัสดุ รพ.หนองจิก`);
+    }
+
+    function updateUserUI() {
+      if (currentUser) {
+        document.getElementById('userNameDisplay').innerText = `${currentUser.name} (${currentUser.dept.split('-')[0]})`;
+      }
+    }
+
+    function switchTab(tab) {
+      document.querySelectorAll('[id^="tabBtn-"]').forEach(b => {
+        b.className = "px-4 py-2 text-sm font-medium rounded-lg text-slate-600 hover:bg-slate-200";
+      });
+      document.getElementById('tabBtn-' + tab).className = "px-4 py-2 text-sm font-semibold rounded-lg bg-teal-600 text-white shadow-sm";
+
+      const searchBox = document.getElementById('searchFilterBox');
+      const tableView = document.getElementById('assetTableView');
+      const ticketsView = document.getElementById('ticketsView');
+      const transfersView = document.getElementById('transfersView');
+      const auditView = document.getElementById('auditView');
+      const analyticsView = document.getElementById('analyticsView');
+
+      searchBox.classList.add('hidden');
+      tableView.classList.add('hidden');
+      ticketsView.classList.add('hidden');
+      transfersView.classList.add('hidden');
+      auditView.classList.add('hidden');
+      analyticsView.classList.add('hidden');
+
+      if (tab === 'all') {
+        searchBox.classList.remove('hidden');
+        tableView.classList.remove('hidden');
+        document.getElementById('deptFilter').value = '';
+        renderTable();
+      } else if (tab === 'mydept') {
+        if (!currentUser) {
+          alert("กรุณาเข้าสู่ระบบเพื่อดูครุภัณฑ์ประจำแผนกของท่าน");
+          openAuthModal();
+          return;
+        }
+        searchBox.classList.remove('hidden');
+        tableView.classList.remove('hidden');
+        document.getElementById('deptFilter').value = currentUser.dept;
+        renderTable();
+      } else if (tab === 'transfers') {
+        transfersView.classList.remove('hidden');
+        renderTransfers();
+      } else if (tab === 'tickets') {
+        ticketsView.classList.remove('hidden');
+        renderTickets();
+      } else if (tab === 'audit') {
+        auditView.classList.remove('hidden');
+      } else if (tab === 'analytics') {
+        analyticsView.classList.remove('hidden');
+        renderAnalytics();
+      }
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function openFirebaseModal() {
+      document.getElementById('firebaseModal').classList.remove('hidden');
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function saveFirebaseConfig() {
+      const cfg = document.getElementById('firebaseConfigInput').value.trim();
+      if (!cfg) return alert("กรุณาวางโค้ด Firebase Config");
+      localStorage.setItem('nongchik_firebase_config', cfg);
+      alert("บันทึกการตั้งค่า Firebase ในเครื่องเรียบร้อยแล้ว");
+    }
+
+    function syncAllToCloud() {
+      alert(`เตรียมซิงค์ครุภัณฑ์ ${assetsData.length.toLocaleString()} รายการขึ้น Cloud Firestore`);
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      initData();
+      if (window.lucide) lucide.createIcons();
+    });
+  </script>
+</body>
+</html>
