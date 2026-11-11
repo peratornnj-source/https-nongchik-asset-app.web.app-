@@ -152,10 +152,10 @@
 
       <!-- Action Utilities -->
       <div class="flex items-center gap-2">
-        <!-- Import CSV Button -->
-        <label class="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg cursor-pointer transition">
-          <i data-lucide="upload" class="w-4 h-4 text-slate-500"></i> นำเข้า CSV
-          <input type="file" id="csvFileInput" accept=".csv" class="hidden" onchange="handleCSVUpload(event)">
+        <!-- Import Database / Spreadsheet Button -->
+        <label class="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg cursor-pointer transition shadow-sm">
+          <i data-lucide="upload" class="w-4 h-4 text-teal-600"></i> นำเข้าข้อมูล (Excel / CSV / JSON)
+          <input type="file" id="databaseFileInput" accept=".xlsx,.xls,.csv,.tsv,.json" class="hidden" onchange="handleDatabaseFileUpload(event)">
         </label>
         
         <!-- Batch Print QR Labels -->
@@ -855,6 +855,100 @@
     </div>
   </div>
 
+  <!-- ================= IMPORT PREVIEW MODAL ================= -->
+  <div id="importPreviewModal" class="fixed inset-0 bg-slate-900/70 z-50 hidden flex items-center justify-center p-4 no-print">
+    <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-center border-b pb-3">
+        <h3 class="font-bold text-slate-800 flex items-center gap-2 text-teal-800 text-base">
+          <i data-lucide="file-spreadsheet" class="w-5 h-5 text-teal-600"></i> ตรวจสอบข้อมูลก่อนนำเข้าฐานข้อมูล
+        </h3>
+        <button onclick="closeModal('importPreviewModal')" class="text-slate-400 hover:text-slate-600">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- File info badge bar -->
+      <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div class="flex items-center gap-2">
+          <span class="font-bold text-slate-700">ไฟล์:</span>
+          <span id="importFileName" class="text-teal-700 font-semibold truncate max-w-xs">-</span>
+        </div>
+        <div class="flex items-center gap-4">
+          <div><span class="text-slate-500">ขนาด:</span> <span id="importFileSize" class="font-semibold text-slate-700">-</span></div>
+          <div><span class="text-slate-500">ตรวจพบ:</span> <span id="importRowCount" class="font-bold text-emerald-600 text-sm">0</span> <span class="text-slate-600">รายการ</span></div>
+        </div>
+      </div>
+
+      <!-- Detected Column Mapping -->
+      <div class="space-y-1.5">
+        <div class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+          <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-500"></i> คอลัมน์ที่ระบบตรวจจับได้อัตโนมัติ (Smart Auto-Detection):
+        </div>
+        <div id="importMappingBadges" class="flex flex-wrap gap-1.5 text-xs"></div>
+      </div>
+
+      <!-- Preview Table -->
+      <div class="space-y-1.5">
+        <div class="text-xs font-bold text-slate-700 flex items-center justify-between">
+          <span>ตัวอย่างข้อมูล (3-5 แถวแรก):</span>
+          <span class="text-[11px] text-slate-400 font-normal">ระบบจะทำความสะอาดราคาและจัดรูปแบบให้อัตโนมัติ</span>
+        </div>
+        <div class="overflow-x-auto border border-slate-200 rounded-lg max-h-48">
+          <table class="min-w-full divide-y divide-slate-200 text-left text-xs">
+            <thead class="bg-slate-100 text-slate-600 font-bold sticky top-0">
+              <tr>
+                <th class="py-2 px-3">เลขครุภัณฑ์</th>
+                <th class="py-2 px-3">รายการ</th>
+                <th class="py-2 px-3">แผนก</th>
+                <th class="py-2 px-3 text-right">ราคาจัดซื้อ</th>
+                <th class="py-2 px-3">วันที่ได้มา</th>
+                <th class="py-2 px-3">สถานะ</th>
+              </tr>
+            </thead>
+            <tbody id="importPreviewTableBody" class="divide-y divide-slate-100 bg-white"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Import Mode Selection -->
+      <div class="bg-teal-50/60 border border-teal-200 rounded-xl p-3.5 space-y-2 text-xs">
+        <div class="font-bold text-teal-900">เลือกรูปแบบการนำเข้าข้อมูล:</div>
+        <label class="flex items-start gap-2 cursor-pointer p-1.5 rounded hover:bg-teal-100/50 transition">
+          <input type="radio" name="importMode" id="importModeMerge" value="merge" checked class="mt-0.5 text-teal-600 focus:ring-teal-500">
+          <div>
+            <span class="font-bold text-slate-800">เพิ่มและอัปเดตต่อจากข้อมูลเดิม (Smart Merge / Upsert)</span>
+            <span class="block text-[11px] text-slate-500">แนะนำ: ข้อมูลครุภัณฑ์เดิมยังคงอยู่ รายการที่มีรหัสตรงกันจะถูกปรับปรุงข้อมูลให้เป็นปัจจุบัน</span>
+          </div>
+        </label>
+        <label class="flex items-start gap-2 cursor-pointer p-1.5 rounded hover:bg-teal-100/50 transition">
+          <input type="radio" name="importMode" id="importModeReplace" value="replace" class="mt-0.5 text-teal-600 focus:ring-teal-500">
+          <div>
+            <span class="font-bold text-rose-800">แทนที่ฐานข้อมูลทั้งหมด (Replace All)</span>
+            <span class="block text-[11px] text-slate-500">ล้างฐานข้อมูลครุภัณฑ์เดิมทั้งหมด และนำชุดข้อมูลจากไฟล์นี้เป็นฐานข้อมูลหลักใหม่</span>
+          </div>
+        </label>
+      </div>
+
+      <!-- Cloud Sync Option -->
+      <div id="importCloudSyncNotice" class="text-xs text-slate-600 flex items-center gap-2 px-1">
+        <input type="checkbox" id="importSyncToCloud" checked class="rounded text-teal-600 focus:ring-teal-500">
+        <label for="importSyncToCloud" class="cursor-pointer">
+          ซิงค์ชุดข้อมูลนี้ขึ้นระบบคลาวด์ Firebase Firestore อัตโนมัติ (เพื่อให้เครื่องอื่นๆ อัปเดตพร้อมกัน)
+        </label>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex justify-end gap-2 pt-2 border-t">
+        <button onclick="closeModal('importPreviewModal')" class="px-4 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 transition">
+          ยกเลิก
+        </button>
+        <button id="btnConfirmImport" onclick="confirmDatabaseImport()" class="px-5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-bold shadow flex items-center gap-1.5 transition">
+          <i data-lucide="check" class="w-4 h-4"></i> ยืนยันนำเข้าข้อมูล
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Hidden Container for Printing Report -->
   <div id="reportPrintArea" style="display: none;"></div>
 
@@ -863,9 +957,11 @@
     import { FirebaseBridge } from './firebase-bridge.js';
     import { AuditEngine } from './audit-engine.js';
     import { ReportGenerator } from './report-generator.js';
+    import { DataImporter } from './data-importer.js';
     window.FirebaseBridge = FirebaseBridge;
     window.AuditEngine = AuditEngine;
     window.ReportGenerator = ReportGenerator;
+    window.DataImporter = DataImporter;
   </script>
 
   <!-- ================= JAVASCRIPT LOGIC WITH EMBEDDED REAL DATA ================= -->
@@ -1070,43 +1166,209 @@
       renderAnalytics();
     }
 
-    // CSV File Reader (Drag & Drop or File Select)
-    function handleCSVUpload(event) {
-      const file = event.target.files[0];
+    // Helper: Escape HTML to prevent XSS in table previews
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    // State for pending imported dataset
+    let pendingImportRows = [];
+    let pendingImportFileName = "";
+    let pendingImportFileSize = "";
+    let pendingImportRawMapping = null;
+
+    // Database & Spreadsheet File Reader (.xlsx, .xls, .csv, .tsv, .json)
+    function handleDatabaseFileUpload(event) {
+      const file = event.target.files && event.target.files[0];
       if (!file) return;
 
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        const text = e.target.result;
-        const lines = text.split('\n').filter(l => l.trim().length > 0);
-        const parsed = [];
+      const fileName = file.name || "";
+      const lowerName = fileName.toLowerCase();
+      const ext = lowerName.slice(lowerName.lastIndexOf('.'));
+      pendingImportFileName = fileName;
+      pendingImportFileSize = (file.size / 1024).toFixed(1) + " KB";
 
-        for (let i = 1; i < lines.length; i++) {
-          const cols = lines[i].split(',').map(s => s.trim().replace(/^"|"$/g, ''));
-          if (cols.length >= 6) {
-            parsed.push({
-              code: cols[0],
-              name: cols[1],
-              price: parseFloat(cols[2]) || 0,
-              date: cols[3],
-              dept: cols[4] || "ยังไม่ระบุแผนก",
-              status: cols[5] || "ใช้งานปกติ"
-            });
+      const reader = new FileReader();
+
+      if (ext === '.json') {
+        reader.onload = function(e) {
+          try {
+            const text = e.target.result;
+            const normalized = DataImporter.parseJSON(text);
+            if (!normalized || normalized.length === 0) {
+              alert("ไม่พบข้อมูลครุภัณฑ์ที่ถูกต้องในไฟล์ JSON");
+              return;
+            }
+            openImportPreviewModal(normalized, { 'รูปแบบ': 'JSON Schema' });
+          } catch (err) {
+            alert("เกิดข้อผิดพลาดในการอ่านไฟล์ JSON: " + err.message);
+          }
+        };
+        reader.readAsText(file, "UTF-8");
+      } else if (ext === '.xlsx' || ext === '.xls' || ext === '.csv' || ext === '.tsv') {
+        reader.onload = function(e) {
+          try {
+            const data = new Uint8Array(e.target.result);
+            if (typeof XLSX === 'undefined') {
+              alert("ไลบรารี SheetJS กำลังโหลด กรุณาลองใหม่อีกครั้งใน 1-2 วินาที");
+              return;
+            }
+            const workbook = XLSX.read(data, { type: 'array' });
+            const firstSheetName = workbook.SheetNames[0];
+            if (!firstSheetName) {
+              alert("ไม่พบชีตข้อมูลในไฟล์นี้");
+              return;
+            }
+            const worksheet = workbook.Sheets[firstSheetName];
+            const rawRows = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+            if (!rawRows || rawRows.length === 0) {
+              alert("ไม่พบข้อมูลแถวในชีต: " + firstSheetName);
+              return;
+            }
+
+            const headers = Object.keys(rawRows[0] || {});
+            const detected = DataImporter.detectColumns(headers);
+            const normalized = DataImporter.normalizeRows(rawRows, detected);
+
+            if (!normalized || normalized.length === 0) {
+              alert("ไม่พบรายการครุภัณฑ์ที่สามารถนำเข้าได้ กรุณาตรวจสอบหัวคอลัมน์");
+              return;
+            }
+
+            openImportPreviewModal(normalized, detected);
+          } catch (err) {
+            alert("เกิดข้อผิดพลาดในการเปิดไฟล์: " + err.message);
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      } else {
+        alert("รองรับเฉพาะไฟล์ .xlsx, .xls, .csv, .tsv หรือ .json เท่านั้น");
+      }
+    }
+
+    // Alias for backward compatibility
+    function handleCSVUpload(event) {
+      handleDatabaseFileUpload(event);
+    }
+
+    function openImportPreviewModal(rows, mapping) {
+      pendingImportRows = rows;
+      pendingImportRawMapping = mapping;
+
+      document.getElementById('importFileName').innerText = pendingImportFileName;
+      document.getElementById('importFileSize').innerText = pendingImportFileSize;
+      document.getElementById('importRowCount').innerText = rows.length.toLocaleString();
+
+      // Render Badges
+      const badgesContainer = document.getElementById('importMappingBadges');
+      badgesContainer.innerHTML = '';
+      const badgeLabels = [
+        { key: 'codeKey', name: 'รหัสครุภัณฑ์' },
+        { key: 'nameKey', name: 'ชื่อรายการ' },
+        { key: 'priceKey', name: 'ราคา' },
+        { key: 'deptKey', name: 'แผนก' },
+        { key: 'dateKey', name: 'วันที่' },
+        { key: 'statusKey', name: 'สถานะ' }
+      ];
+
+      badgeLabels.forEach(b => {
+        const val = mapping && mapping[b.key];
+        const span = document.createElement('span');
+        if (val) {
+          span.className = 'px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-medium text-[11px] border border-emerald-300 flex items-center gap-1';
+          span.innerText = `✓ ${b.name}: "${val}"`;
+        } else {
+          span.className = 'px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[11px] border border-slate-200';
+          span.innerText = `- ${b.name}: ใช้ค่าเริ่มต้น`;
+        }
+        badgesContainer.appendChild(span);
+      });
+
+      // Render Preview Rows (up to 5)
+      const tbody = document.getElementById('importPreviewTableBody');
+      tbody.innerHTML = '';
+      const previewRows = rows.slice(0, 5);
+      previewRows.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50';
+        tr.innerHTML = `
+          <td class="py-1.5 px-3 font-mono font-bold text-teal-800">${escapeHtml(item.code || '')}</td>
+          <td class="py-1.5 px-3 truncate max-w-xs">${escapeHtml(item.name || '')}</td>
+          <td class="py-1.5 px-3">${escapeHtml(item.dept || '')}</td>
+          <td class="py-1.5 px-3 text-right font-mono">${(Number(item.price) || 0).toLocaleString()} ฿</td>
+          <td class="py-1.5 px-3">${escapeHtml(item.date || '')}</td>
+          <td class="py-1.5 px-3"><span class="px-1.5 py-0.5 rounded text-[10px] ${item.status === 'ใช้งานปกติ' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}">${escapeHtml(item.status || '')}</span></td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      // Show/Hide Cloud sync option depending on bridge status
+      const cloudNotice = document.getElementById('importCloudSyncNotice');
+      if (cloudNotice) {
+        const isOnline = window.FirebaseBridge && FirebaseBridge.isCloudActive();
+        cloudNotice.style.display = isOnline ? 'flex' : 'none';
+      }
+
+      document.getElementById('importPreviewModal').classList.remove('hidden');
+      if (window.lucide) lucide.createIcons();
+    }
+
+    async function confirmDatabaseImport() {
+      if (!pendingImportRows || pendingImportRows.length === 0) {
+        alert("ไม่มีข้อมูลที่จะนำเข้า");
+        return;
+      }
+
+      const isReplace = document.getElementById('importModeReplace').checked;
+      const mode = isReplace ? 'replace' : 'merge';
+
+      const btn = document.getElementById('btnConfirmImport');
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = `<span class="animate-spin inline-block mr-1">⌛</span> กำลังประมวลผล...`;
+
+      try {
+        const result = DataImporter.mergeAssets(assetsData, pendingImportRows, mode);
+        assetsData = result.merged;
+        localStorage.setItem('nongchik_custom_assets', JSON.stringify(assetsData));
+
+        // Sync to cloud if checked and online
+        const shouldSyncCloud = document.getElementById('importSyncToCloud') && document.getElementById('importSyncToCloud').checked;
+        if (shouldSyncCloud && window.FirebaseBridge && FirebaseBridge.isCloudActive()) {
+          try {
+            await FirebaseBridge.seedInitialAssets(assetsData);
+          } catch (cloudErr) {
+            console.warn("Could not sync imported assets to Firestore immediately:", cloudErr);
           }
         }
 
-        if (parsed.length > 0) {
-          assetsData = parsed;
-          localStorage.setItem('nongchik_custom_assets', JSON.stringify(assetsData));
-          alert(`นำเข้าครุภัณฑ์โรงพยาบาลหนองจิกเรียบร้อย จำนวน ${parsed.length.toLocaleString()} รายการ`);
-          updateStats();
-          renderTable();
-          renderAnalytics();
-        } else {
-          alert("ไม่พบรูปแบบข้อมูลที่ถูกต้องในไฟล์ CSV");
+        updateStats();
+        renderTable();
+        renderAnalytics();
+        if (typeof renderAuditUI === 'function') {
+          renderAuditUI();
         }
-      };
-      reader.readAsText(file, "UTF-8");
+
+        closeModal('importPreviewModal');
+
+        const msg = mode === 'replace'
+          ? `แทนที่ฐานข้อมูลสำเร็จทั้งหมด ${assetsData.length.toLocaleString()} รายการ`
+          : `นำเข้าข้อมูลสำเร็จ: เพิ่มใหม่ ${result.addedCount.toLocaleString()} รายการ, อัปเดต ${result.updatedCount.toLocaleString()} รายการ (รวมปัจจุบัน ${assetsData.length.toLocaleString()} รายการ)`;
+        alert(msg);
+      } catch (err) {
+        alert("เกิดข้อผิดพลาดในการนำเข้า: " + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        const fileInput = document.getElementById('databaseFileInput');
+        if (fileInput) fileInput.value = '';
+      }
     }
 
     function updateStats() {
