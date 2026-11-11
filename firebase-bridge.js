@@ -17,6 +17,24 @@ export const FirebaseBridge = {
   },
 
   /**
+   * Safely extracts the asset code from scanned QR text or URL.
+   * Handles URLs with forward slashes in the asset code, e.g. https://.../scan/6515-070-0002/22
+   */
+  extractQrAssetCode(text) {
+    if (!text || typeof text !== 'string') return '';
+    const trimmed = text.trim();
+    const scanMatch = trimmed.match(/\/scan\/(.+)$/);
+    if (scanMatch) {
+      try {
+        return decodeURIComponent(scanMatch[1]).trim();
+      } catch {
+        return scanMatch[1].trim();
+      }
+    }
+    return trimmed;
+  },
+
+  /**
    * Parses JSON string, JavaScript snippet (e.g. const firebaseConfig = { ... };),
    * or direct object into a clean Firebase config object.
    */
@@ -232,23 +250,30 @@ export const FirebaseBridge = {
 
   /**
    * Saves an individual audit item to the annual audit round document.
+   * Uses nested map format for Firestore set({ merge: true }) and wraps in try-catch for offline safety.
    */
   async saveAuditItem(fiscalYear, assetCode, itemData) {
     const sanitizedId = this.sanitizeCode(assetCode);
     if (firestoreDb && fiscalYear) {
-      const docRef = firestoreDb.collection('annual_audits').doc(`audit_${fiscalYear}`);
-      const updatePayload = {
-        lastUpdated: new Date().toISOString(),
-        [`items.${sanitizedId}`]: {
-          ...itemData,
-          code: assetCode,
-          auditedAt: itemData.auditedAt || new Date().toISOString()
-        }
-      };
-      await docRef.set(updatePayload, { merge: true });
+      try {
+        const docRef = firestoreDb.collection('annual_audits').doc(`audit_${fiscalYear}`);
+        const updatePayload = {
+          lastUpdated: new Date().toISOString(),
+          items: {
+            [sanitizedId]: {
+              ...itemData,
+              code: assetCode,
+              auditedAt: itemData.auditedAt || new Date().toISOString()
+            }
+          }
+        };
+        await docRef.set(updatePayload, { merge: true });
+      } catch (err) {
+        console.warn('[FirebaseBridge] Firestore audit sync deferred (offline/error):', err);
+      }
     }
 
-    // Also persist to localStorage for offline safety
+    // Always persist to localStorage for offline safety
     try {
       const key = `nongchik_audit_${fiscalYear}`;
       const existing = JSON.parse(localStorage.getItem(key) || '{"items":{}}');
@@ -261,6 +286,50 @@ export const FirebaseBridge = {
       existing.lastUpdated = new Date().toISOString();
       localStorage.setItem(key, JSON.stringify(existing));
     } catch {}
+  },
+
+  /**
+   * Saves or finalizes an entire annual audit round document in Firestore.
+   */
+  async saveAuditRound(roundData) {
+    if (!roundData || !roundData.fiscalYear) return;
+    const docId = `audit_${roundData.fiscalYear}`;
+    if (firestoreDb) {
+      try {
+        await firestoreDb.collection('annual_audits').doc(docId).set({
+          ...roundData,
+          lastUpdated: new Date().toISOString()
+        }, { merge: true });
+      } catch (err) {
+        console.warn('[FirebaseBridge] Firestore save round deferred:', err);
+      }
+    }
+  },
+
+  /**
+   * Batch updates master asset statuses in Firestore when closing an audit round.
+   */
+  async updateAssetsBatch(updates) {
+    if (!firestoreDb || !Array.isArray(updates) || updates.length === 0) return;
+    const batchLimit = 400;
+    for (let i = 0; i < updates.length; i += batchLimit) {
+      const chunk = updates.slice(i, i + batchLimit);
+      const batch = firestoreDb.batch();
+      chunk.forEach(u => {
+        const docId = this.sanitizeCode(u.code);
+        const ref = firestoreDb.collection('assets').doc(docId);
+        batch.set(ref, {
+          status: u.newStatus,
+          updatedAt: new Date().toISOString(),
+          updatedBy: 'Annual Audit Finalize'
+        }, { merge: true });
+      });
+      try {
+        await batch.commit();
+      } catch (err) {
+        console.warn('[FirebaseBridge] Batch asset update failed:', err);
+      }
+    }
   },
 
   /**

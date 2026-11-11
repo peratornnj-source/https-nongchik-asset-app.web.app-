@@ -31,9 +31,9 @@
     @media print {
       body * { visibility: hidden; }
       #batchPrintArea, #batchPrintArea * { visibility: visible; }
-      #batchPrintArea { position: absolute; left: 0; top: 0; width: 100%; }
+      #batchPrintArea { position: static; width: 100%; }
       #reportPrintArea, #reportPrintArea * { visibility: visible; }
-      #reportPrintArea { position: absolute; left: 0; top: 0; width: 100%; display: block !important; }
+      #reportPrintArea { position: static; width: 100%; display: block !important; }
       .no-print { display: none !important; }
     }
   </style>
@@ -1311,9 +1311,8 @@
         { facingMode: "environment" },
         { fps: 10, qrbox: { width: 220, height: 220 } },
         (decodedText) => {
-          const parts = decodedText.split('/');
-          const code = parts[parts.length - 1];
-          const found = assetsData.find(a => a.code.includes(code));
+          const code = window.FirebaseBridge ? window.FirebaseBridge.extractQrAssetCode(decodedText) : decodedText.trim();
+          const found = assetsData.find(a => a.code === code) || assetsData.find(a => a.code.includes(code));
 
           if (isAuditScanMode) {
             handleAuditScannedAsset(found, decodedText);
@@ -1732,6 +1731,11 @@
       localStorage.setItem('nongchik_custom_assets', JSON.stringify(assetsData));
       localStorage.setItem(`nongchik_audit_${activeFiscalYear}`, JSON.stringify(currentAuditRound));
 
+      if (window.FirebaseBridge) {
+        window.FirebaseBridge.saveAuditRound(currentAuditRound);
+        window.FirebaseBridge.updateAssetsBatch(updates);
+      }
+
       updateStats();
       renderTable();
       renderAnalytics();
@@ -2085,6 +2089,7 @@
     async function initFirebaseConnection() {
       const cfg = localStorage.getItem('nongchik_firebase_config');
       if (cfg && window.FirebaseBridge) {
+        window.FirebaseBridge.reset();
         const success = await window.FirebaseBridge.init(cfg);
         if (success) {
           // Subscribe to real-time asset updates

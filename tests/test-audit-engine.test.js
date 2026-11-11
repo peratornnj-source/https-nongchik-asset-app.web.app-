@@ -99,3 +99,21 @@ test('generateMasterUpdates correctly identifies status changes to apply', () =>
   const a3Update = updates.find(u => u.code === 'A3');
   assert.equal(a3Update.newStatus, 'สูญไป/หาไม่พบ');
 });
+
+test('computeSummary does not let historically disposed scans inflate active denominator', () => {
+  const allAssets = [
+    { code: 'A1', name: 'Com 1', price: 10000, status: 'ใช้งานปกติ' },
+    { code: 'A2_DISPOSED', name: 'Disposed item', price: 50000, status: 'จำหน่ายแล้ว/ยกเลิกการใช้' }
+  ];
+  let round = AuditEngine.createRound('2569', '125/2569', '2026-09-15', []);
+  // Scanner scans active item A1
+  round = AuditEngine.recordScan(round, 'A1', 'Auditor', 'normal').round;
+  // Scanner also accidentally scans physical tag of old disposed item
+  round = AuditEngine.recordScan(round, 'A2_DISPOSED', 'Auditor', 'normal').round;
+
+  const summary = AuditEngine.computeSummary(round, allAssets);
+  assert.equal(summary.totalCount, 1); // Only active A1 in denominator
+  assert.equal(summary.scannedCount, 1); // Active scanned count capped to active items
+  assert.equal(summary.pendingCount, 0);
+  assert.equal(summary.progressPercent, 100);
+});

@@ -185,19 +185,19 @@ export const ReportGenerator = {
                 <td colspan="2" style="text-align: center; padding: 8px; border: 1px solid #475569;">รวมที่ตรวจนับแล้วทั้งสิ้น</td>
                 <td style="text-align: right; padding: 8px; border: 1px solid #475569;">${formatNumber(s.scannedCount)}</td>
                 <td style="text-align: right; padding: 8px; border: 1px solid #475569;">${calcPct(s.scannedCount)}%</td>
-                <td style="text-align: right; padding: 8px; border: 1px solid #475569;">${formatCurrency(s.totalValue)}</td>
-                <td style="text-align: center; padding: 8px; border: 1px solid #475569;">(คงเหลือยังไม่ตรวจนับ: ${formatNumber(s.pendingCount)} รายการ)</td>
+                <td style="text-align: right; padding: 8px; border: 1px solid #475569;">${formatCurrency(s.scannedTotalValue || s.totalValue)}</td>
+                <td style="text-align: center; padding: 8px; border: 1px solid #475569;">(มูลค่าพัสดุตามบัญชีทั้งสิ้น: ${formatCurrency(s.totalValue)} บาท)</td>
               </tr>
             </tbody>
           </table>
         </div>
 
         <!-- Section 3: Defective Items Breakdown Table -->
-        <div class="avoid-break" style="margin-top: 25px; margin-bottom: 25px;">
+        <div style="margin-top: 25px; margin-bottom: 25px;">
           <h4 style="font-size: 14px; font-weight: bold; margin: 0 0 5px 0;">2. บัญชีรายละเอียดครุภัณฑ์ที่ชำรุด เสื่อมสภาพ หรือสูญไป (แนบท้าย)</h4>
           <table>
             <thead>
-              <tr>
+              <tr style="break-inside: avoid; page-break-inside: avoid;">
                 <th style="width: 40px;">ลำดับ</th>
                 <th style="width: 120px;">เลขครุภัณฑ์</th>
                 <th>รายการครุภัณฑ์</th>
@@ -242,7 +242,7 @@ export const ReportGenerator = {
       [2, 'ชำรุด สามารถซ่อมแซมได้', s.damagedRepairableCount || 0, `${((s.damagedRepairableCount || 0) / (s.totalCount || 1) * 100).toFixed(1)}%`, s.damagedRepairableValue || 0, 'จัดสรรงบประมาณส่งซ่อม'],
       [3, 'ชำรุด/เสื่อมสภาพไม่คุ้มค่าซ่อม', s.deterioratedUnusableCount || 0, `${((s.deterioratedUnusableCount || 0) / (s.totalCount || 1) * 100).toFixed(1)}%`, s.deterioratedUnusableValue || 0, 'เสนอขออนุมัติจำหน่ายออกจากบัญชี'],
       [4, 'สูญไป/หาตัวไม่พบ', s.lostCount || 0, `${((s.lostCount || 0) / (s.totalCount || 1) * 100).toFixed(1)}%`, s.lostValue || 0, 'เสนอดำเนินการทางละเมิด/จำหน่าย'],
-      ['รวมที่ตรวจนับแล้ว', '', s.scannedCount || 0, `${((s.scannedCount || 0) / (s.totalCount || 1) * 100).toFixed(1)}%`, s.totalValue || 0, ''],
+      ['รวมที่ตรวจนับแล้ว', '', s.scannedCount || 0, `${((s.scannedCount || 0) / (s.totalCount || 1) * 100).toFixed(1)}%`, s.scannedTotalValue || s.totalValue || 0, ''],
       ['คงเหลือยังไม่ตรวจนับ', '', s.pendingCount || 0, `${((s.pendingCount || 0) / (s.totalCount || 1) * 100).toFixed(1)}%`, '-', '']
     ];
 

@@ -23,6 +23,9 @@ test('buildStatutoryReportData references Regulation Clause 213 and committee st
   assert.equal(reportData.orderNo, 'คำสั่งที่ 125/2569');
   assert.equal(reportData.committee.length, 3);
   
+  // Scanned subtotal value must match sum of scanned items, not all hospital assets
+  assert.equal(reportData.summary.scannedTotalValue, 80000); // 10000 + 50000 + 20000
+  
   // Defective / Disposed / Lost items should be in defectiveItems list for attachment
   assert.equal(reportData.defectiveItems.length, 2);
   const a2Item = reportData.defectiveItems.find(i => i.code === 'A2');

@@ -105,6 +105,9 @@ export const AuditEngine = {
     let lostValue = 0;
 
     Object.entries(items).forEach(([key, rec]) => {
+      // Only count items that are part of the active inventory denominator
+      if (!assetsMap.has(key)) return;
+
       scannedCount++;
       const asset = assetsMap.get(key);
       const price = asset ? (Number(asset.price) || 0) : 0;
@@ -132,6 +135,7 @@ export const AuditEngine = {
       }
     });
 
+    const scannedTotalValue = normalValue + damagedRepairableValue + deterioratedUnusableValue + lostValue;
     const pendingCount = Math.max(0, totalCount - scannedCount);
     const progressPercent = totalCount > 0 ? Math.round((scannedCount / totalCount) * 100) : 0;
 
@@ -139,6 +143,7 @@ export const AuditEngine = {
       totalCount,
       totalValue,
       scannedCount,
+      scannedTotalValue,
       pendingCount,
       progressPercent,
       normalCount,
