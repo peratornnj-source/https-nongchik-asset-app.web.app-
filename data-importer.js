@@ -7,7 +7,7 @@ const FIELD_PATTERNS = {
   price: [/ราคาจัดซื้อ/i, /ราคาต่อหน่วย/i, /ราคา/i, /มูลค่า/i, /วงเงิน/i, /price/i, /cost/i, /value/i, /amount/i],
   date: [/วันที่ได้มา/i, /วันที่ตรวจรับ/i, /วันที่จัดซื้อ/i, /^วันที่$/i, /^date$/i, /acquire/i, /received/i, /ปีงบ/i],
   dept: [/หน่วยงานที่ครอบครอง/i, /แผนกที่ครองครอง/i, /^แผนก$/i, /^หน่วยงาน$/i, /^ฝ่าย$/i, /^ตึก$/i, /^ที่ตั้ง$/i, /^dept$/i, /^department$/i, /^location$/i],
-  status: [/^สภาพ$/i, /^สถานะ$/i, /^status$/i, /^condition$/i]
+  status: [/สภาพ/i, /สถานะ/i, /^status$/i, /^condition$/i]
 };
 
 function matchHeader(header, patterns) {

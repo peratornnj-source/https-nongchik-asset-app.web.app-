@@ -79,3 +79,38 @@ test('mergeAssets in replace mode completely overwrites existing dataset', () =>
   assert.equal(result.merged.length, 1);
   assert.equal(result.merged[0].code, 'B1');
 });
+
+test('real Nongchik assets CSV parses and normalizes 845 records accurately', async () => {
+  const fs = await import('fs');
+  const csvContent = fs.readFileSync('assets_nongchik_full.csv', 'utf8');
+  const lines = csvContent.split(/\r?\n/).filter(l => l.trim().length > 0);
+  assert.equal(lines.length, 846); // 1 header + 845 rows
+
+  const headers = lines[0].split(',').map(s => s.trim());
+  const detected = DataImporter.detectColumns(headers);
+  assert.equal(detected.codeKey, 'หมายเลขครุภัณฑ์');
+  assert.equal(detected.nameKey, 'ชื่อรายการ');
+  assert.equal(detected.priceKey, 'ราคาจัดซื้อ');
+  assert.equal(detected.dateKey, 'วันที่ได้มา');
+  assert.equal(detected.deptKey, 'หน่วยงานที่ครอบครอง');
+  assert.equal(detected.statusKey, 'สภาพ/สถานะ');
+
+  // Convert CSV rows to objects
+  const rawRows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const parts = lines[i].split(',');
+    rawRows.push({
+      [headers[0]]: parts[0],
+      [headers[1]]: parts[1],
+      [headers[2]]: parts[2],
+      [headers[3]]: parts[3],
+      [headers[4]]: parts[4],
+      [headers[5]]: parts[5]
+    });
+  }
+
+  const normalized = DataImporter.normalizeRows(rawRows, detected);
+  assert.equal(normalized.length, 845);
+  const totalValue = normalized.reduce((sum, item) => sum + item.price, 0);
+  assert.ok(totalValue > 40000000, 'Total asset value should exceed 40M THB');
+});
