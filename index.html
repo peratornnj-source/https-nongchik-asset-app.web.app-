@@ -979,7 +979,7 @@
       <div id="importCloudSyncNotice" class="text-xs text-slate-600 flex items-center gap-2 px-1">
         <input type="checkbox" id="importSyncToCloud" checked class="rounded text-teal-600 focus:ring-teal-500">
         <label for="importSyncToCloud" class="cursor-pointer">
-          ซิงค์ชุดข้อมูลนี้ขึ้นระบบคลาวด์ Firebase Firestore อัตโนมัติ (เพื่อให้เครื่องอื่นๆ อัปเดตพร้อมกัน)
+          ซิงค์ชุดข้อมูลนี้ขึ้นระบบคลาวด์ Firebase Firestore (ทำงานในพื้นหลัง ไม่ทำให้เครื่องช้า)
         </label>
       </div>
 
@@ -8048,6 +8048,36 @@
       if (window.lucide) lucide.createIcons();
     }
 
+    function showNotificationToast(msg, type = 'info') {
+      let toast = document.getElementById('globalNotificationToast');
+      if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'globalNotificationToast';
+        document.body.appendChild(toast);
+      }
+
+      const styles = {
+        info: 'bg-slate-800 text-white border border-slate-700 shadow-lg',
+        success: 'bg-emerald-600 text-white shadow-xl shadow-emerald-600/30',
+        warning: 'bg-amber-600 text-white shadow-xl shadow-amber-600/30',
+        error: 'bg-rose-600 text-white shadow-xl shadow-rose-600/30'
+      };
+
+      toast.className = `fixed bottom-5 right-5 z-50 px-4 py-3 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all duration-300 transform translate-y-10 opacity-0 ${styles[type] || styles.info}`;
+      toast.innerHTML = `<span>${escapeHtml(msg)}</span>`;
+
+      requestAnimationFrame(() => {
+        toast.style.transform = 'translateY(0)';
+        toast.style.opacity = '1';
+      });
+
+      if (toast._timer) clearTimeout(toast._timer);
+      toast._timer = setTimeout(() => {
+        toast.style.transform = 'translateY(10px)';
+        toast.style.opacity = '0';
+      }, 4500);
+    }
+
     async function confirmDatabaseImport() {
       if (!pendingImportRows || pendingImportRows.length === 0) {
         alert("ไม่มีข้อมูลที่จะนำเข้า");
@@ -8056,6 +8086,7 @@
 
       const isReplace = document.getElementById('importModeReplace').checked;
       const mode = isReplace ? 'replace' : 'merge';
+      const shouldSyncCloud = document.getElementById('importSyncToCloud') && document.getElementById('importSyncToCloud').checked;
 
       const btn = document.getElementById('btnConfirmImport');
       const originalText = btn.innerHTML;
@@ -8063,21 +8094,12 @@
       btn.innerHTML = `<span class="animate-spin inline-block mr-1">⌛</span> กำลังประมวลผล...`;
 
       try {
+        // 1. Process local import instantly (< 50ms)
         const result = DataImporter.mergeAssets(assetsData, pendingImportRows, mode);
         assetsData = result.merged;
         localStorage.setItem('nongchik_custom_assets', JSON.stringify(assetsData));
 
-        // Sync to cloud if checked and online
-        const shouldSyncCloud = document.getElementById('importSyncToCloud') && document.getElementById('importSyncToCloud').checked;
-        const isCloudReady = Boolean(window.FirebaseBridge && (typeof FirebaseBridge.isCloudActive === 'function' ? FirebaseBridge.isCloudActive() : FirebaseBridge.getStatus?.() !== 'local_storage'));
-        if (shouldSyncCloud && isCloudReady) {
-          try {
-            await FirebaseBridge.seedInitialAssets(assetsData);
-          } catch (cloudErr) {
-            console.warn("Could not sync imported assets to Firestore immediately:", cloudErr);
-          }
-        }
-
+        // 2. Immediately refresh all UI elements and KPI cards
         updateStats();
         renderTable();
         renderAnalytics();
@@ -8085,19 +8107,45 @@
           renderAuditUI();
         }
 
+        // 3. Immediately close modal and reset file input
         closeModal('importPreviewModal');
+        const fileInput = document.getElementById('databaseFileInput');
+        if (fileInput) fileInput.value = '';
 
         const msg = mode === 'replace'
           ? `แทนที่ฐานข้อมูลสำเร็จทั้งหมด ${assetsData.length.toLocaleString()} รายการ`
-          : `นำเข้าข้อมูลสำเร็จ: เพิ่มใหม่ ${result.addedCount.toLocaleString()} รายการ, อัปเดต ${result.updatedCount.toLocaleString()} รายการ (รวมปัจจุบัน ${assetsData.length.toLocaleString()} รายการ)`;
-        alert(msg);
+          : `นำเข้าข้อมูลสำเร็จ: เพิ่มใหม่ ${result.addedCount.toLocaleString()} รายการ, อัปเดต ${result.updatedCount.toLocaleString()} รายการ (รวม ${assetsData.length.toLocaleString()} รายการ)`;
+        showNotificationToast(msg, 'success');
+
+        // 4. Background Asynchronous Cloud Sync (Non-blocking: never freezes the UI)
+        const isCloudReady = Boolean(window.FirebaseBridge && (typeof FirebaseBridge.isCloudActive === 'function' ? FirebaseBridge.isCloudActive() : FirebaseBridge.getStatus?.() !== 'local_storage'));
+        if (shouldSyncCloud && isCloudReady) {
+          const txt = document.getElementById('cloudStatusText');
+          const dot = document.getElementById('cloudStatusDot');
+          if (txt) txt.innerText = `กำลังซิงค์ Cloud...`;
+          if (dot) dot.className = "w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping";
+
+          // Run asynchronously in background
+          setTimeout(async () => {
+            try {
+              const res = await FirebaseBridge.seedInitialAssets(assetsData, (done, total) => {
+                if (txt) txt.innerText = `ซิงค์ Cloud (${done.toLocaleString()}/${total.toLocaleString()})`;
+              });
+              updateCloudStatusUI();
+              showNotificationToast(`ซิงค์ขึ้น Cloud Firestore เรียบร้อย (${res.inserted.toLocaleString()} รายการ)`, 'success');
+            } catch (cloudErr) {
+              console.warn("Background cloud sync note:", cloudErr);
+              updateCloudStatusUI();
+              showNotificationToast(`ข้อมูลบันทึกในเครื่องเรียบร้อย (ซิงค์ Cloud อยู่ในโหมดออฟไลน์)`, 'info');
+            }
+          }, 50);
+        }
+
       } catch (err) {
         alert("เกิดข้อผิดพลาดในการนำเข้า: " + err.message);
       } finally {
         btn.disabled = false;
         btn.innerHTML = originalText;
-        const fileInput = document.getElementById('databaseFileInput');
-        if (fileInput) fileInput.value = '';
       }
     }
 

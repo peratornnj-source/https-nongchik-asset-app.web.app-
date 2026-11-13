@@ -170,7 +170,7 @@ export const FirebaseBridge = {
       return { total: 0, inserted: 0 };
     }
 
-    const batchLimit = 400;
+    const batchLimit = 250;
     let inserted = 0;
     const total = assetsArray.length;
 
@@ -193,7 +193,13 @@ export const FirebaseBridge = {
         }, { merge: true });
       });
 
-      await batch.commit();
+      // 12-second timeout per batch to avoid hanging on slow network or missing Firestore permissions
+      const commitPromise = batch.commit();
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Cloud sync batch timeout (12s)')), 12000)
+      );
+      await Promise.race([commitPromise, timeoutPromise]);
+
       inserted += chunk.length;
       if (typeof onProgress === 'function') {
         onProgress(inserted, total);
