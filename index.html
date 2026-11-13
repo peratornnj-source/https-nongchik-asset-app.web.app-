@@ -8040,7 +8040,7 @@
       // Show/Hide Cloud sync option depending on bridge status
       const cloudNotice = document.getElementById('importCloudSyncNotice');
       if (cloudNotice) {
-        const isOnline = window.FirebaseBridge && FirebaseBridge.isCloudActive();
+        const isOnline = Boolean(window.FirebaseBridge && (typeof FirebaseBridge.isCloudActive === 'function' ? FirebaseBridge.isCloudActive() : FirebaseBridge.getStatus?.() !== 'local_storage'));
         cloudNotice.style.display = isOnline ? 'flex' : 'none';
       }
 
@@ -8069,7 +8069,8 @@
 
         // Sync to cloud if checked and online
         const shouldSyncCloud = document.getElementById('importSyncToCloud') && document.getElementById('importSyncToCloud').checked;
-        if (shouldSyncCloud && window.FirebaseBridge && FirebaseBridge.isCloudActive()) {
+        const isCloudReady = Boolean(window.FirebaseBridge && (typeof FirebaseBridge.isCloudActive === 'function' ? FirebaseBridge.isCloudActive() : FirebaseBridge.getStatus?.() !== 'local_storage'));
+        if (shouldSyncCloud && isCloudReady) {
           try {
             await FirebaseBridge.seedInitialAssets(assetsData);
           } catch (cloudErr) {

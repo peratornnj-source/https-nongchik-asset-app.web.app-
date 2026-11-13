@@ -96,6 +96,13 @@ export const FirebaseBridge = {
   },
 
   /**
+   * Returns true if cloud sync is active (connected or offline cached).
+   */
+  isCloudActive() {
+    return currentStatus === 'connected' || currentStatus === 'offline_cached';
+  },
+
+  /**
    * Initializes Firebase and Firestore with IndexedDB persistence if running in browser.
    */
   async init(configInput, options = { enablePersistence: true }) {

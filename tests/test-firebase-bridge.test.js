@@ -25,6 +25,7 @@ test('parseConfig handles valid JSON string, JS object snippet, and invalid inpu
 test('fallback to localStorage when Firebase is not configured', () => {
   FirebaseBridge.reset();
   assert.equal(FirebaseBridge.getStatus(), 'local_storage');
+  assert.equal(FirebaseBridge.isCloudActive(), false);
 });
 
 test('extractQrAssetCode correctly parses URL containing slashes in asset code', () => {
