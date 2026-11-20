@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { FirebaseBridge } from '../firebase-bridge.js';
 
 test('sanitizeCode replaces forward slashes with underscores and trims', () => {
@@ -37,4 +38,39 @@ test('extractQrAssetCode correctly parses URL containing slashes in asset code',
 
   const rawCode = '6520-004-0001/3';
   assert.equal(FirebaseBridge.extractQrAssetCode(rawCode), '6520-004-0001/3');
+});
+
+test('extended FirebaseBridge methods exist and safely fallback in local mode', async () => {
+  FirebaseBridge.reset();
+  assert.equal(typeof FirebaseBridge.saveUserProfile, 'function');
+  assert.equal(typeof FirebaseBridge.getUserProfile, 'function');
+  assert.equal(typeof FirebaseBridge.listUserProfiles, 'function');
+  assert.equal(typeof FirebaseBridge.appendAuditLog, 'function');
+  assert.equal(typeof FirebaseBridge.listenAuditLogs, 'function');
+  assert.equal(typeof FirebaseBridge.saveDisposal, 'function');
+  assert.equal(typeof FirebaseBridge.listenDisposals, 'function');
+  assert.equal(typeof FirebaseBridge.savePmSchedule, 'function');
+  assert.equal(typeof FirebaseBridge.listenPmSchedules, 'function');
+
+  assert.equal(await FirebaseBridge.saveUserProfile('u1', { role: 'admin' }), false);
+  assert.equal(await FirebaseBridge.getUserProfile('u1'), null);
+  assert.deepEqual(await FirebaseBridge.listUserProfiles(), []);
+  assert.equal(await FirebaseBridge.appendAuditLog({ id: 'LOG-1', action: 'TEST' }), false);
+  assert.equal(await FirebaseBridge.saveDisposal({ id: 'DISP-1' }), false);
+  assert.equal(await FirebaseBridge.savePmSchedule({ id: 'PM-1' }), false);
+});
+
+test('firestore.rules and storage.rules define RBAC rules for all 5 hospital roles', () => {
+  const fsRules = fs.readFileSync(new URL('../firestore.rules', import.meta.url), 'utf8');
+  const stRules = fs.readFileSync(new URL('../storage.rules', import.meta.url), 'utf8');
+
+  assert.ok(fsRules.includes("match /assets/{assetId}"));
+  assert.ok(fsRules.includes("match /audit_logs/{logId}"));
+  assert.ok(fsRules.includes("match /disposals/{disposalId}"));
+  assert.ok(fsRules.includes("match /pm_schedules/{scheduleId}"));
+  assert.ok(fsRules.includes("'admin'") && fsRules.includes("'auditor'") && fsRules.includes("'technician'") && fsRules.includes("'executive'"));
+
+  assert.ok(stRules.includes("match /assets/{allPaths=**}"));
+  assert.ok(stRules.includes("match /audits/{allPaths=**}"));
+  assert.ok(stRules.includes("match /pm/{allPaths=**}"));
 });
