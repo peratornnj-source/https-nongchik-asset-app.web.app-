@@ -363,6 +363,159 @@ export const FirebaseBridge = {
     if (firestoreDb) {
       await firestoreDb.collection('transfers').doc(id).set(transfer, { merge: true });
     }
+  },
+
+  /**
+   * Saves or updates a user profile in Firestore `users/{uid}`.
+   */
+  async saveUserProfile(uid, profile) {
+    if (!firestoreDb || !uid) return false;
+    try {
+      await firestoreDb.collection('users').doc(String(uid)).set({
+        ...profile,
+        uid: String(uid),
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+      return true;
+    } catch (err) {
+      console.warn('[FirebaseBridge] saveUserProfile failed:', err);
+      return false;
+    }
+  },
+
+  /**
+   * Fetches a single user profile from Firestore `users/{uid}`.
+   */
+  async getUserProfile(uid) {
+    if (!firestoreDb || !uid) return null;
+    try {
+      const snap = await firestoreDb.collection('users').doc(String(uid)).get();
+      return snap.exists ? { uid: snap.id, ...snap.data() } : null;
+    } catch (err) {
+      console.warn('[FirebaseBridge] getUserProfile failed:', err);
+      return null;
+    }
+  },
+
+  /**
+   * Lists all registered user profiles (for Admin RBAC management and first-user bootstrap check).
+   */
+  async listUserProfiles() {
+    if (!firestoreDb) return [];
+    try {
+      const snap = await firestoreDb.collection('users').get();
+      return snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+    } catch (err) {
+      console.warn('[FirebaseBridge] listUserProfiles failed:', err);
+      return [];
+    }
+  },
+
+  /**
+   * Appends an immutable audit log entry to Firestore `audit_logs`.
+   */
+  async appendAuditLog(entry) {
+    if (!firestoreDb || !entry) return false;
+    const id = entry.id || `LOG-${Date.now()}`;
+    try {
+      await firestoreDb.collection('audit_logs').doc(id).set({
+        ...entry,
+        id,
+        timestamp: entry.timestamp || new Date().toISOString()
+      });
+      return true;
+    } catch (err) {
+      console.warn('[FirebaseBridge] appendAuditLog failed:', err);
+      return false;
+    }
+  },
+
+  /**
+   * Listens to recent audit logs ordered by timestamp descending.
+   */
+  listenAuditLogs(callback, limitCount = 200) {
+    if (!firestoreDb) return () => {};
+    const unsub = firestoreDb.collection('audit_logs')
+      .orderBy('timestamp', 'desc')
+      .limit(limitCount)
+      .onSnapshot(snap => {
+        const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        callback(items);
+      }, err => {
+        console.warn('[FirebaseBridge] listenAuditLogs error:', err);
+      });
+    activeListeners.push(unsub);
+    return unsub;
+  },
+
+  /**
+   * Saves or updates a statutory disposal request in Firestore `disposals`.
+   */
+  async saveDisposal(disposal) {
+    if (!firestoreDb || !disposal) return false;
+    const id = disposal.id || `DISP-${Date.now()}`;
+    try {
+      await firestoreDb.collection('disposals').doc(id).set({
+        ...disposal,
+        id,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+      return true;
+    } catch (err) {
+      console.warn('[FirebaseBridge] saveDisposal failed:', err);
+      return false;
+    }
+  },
+
+  /**
+   * Listens to statutory disposal records in real time.
+   */
+  listenDisposals(callback) {
+    if (!firestoreDb) return () => {};
+    const unsub = firestoreDb.collection('disposals')
+      .onSnapshot(snap => {
+        const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        callback(items);
+      }, err => {
+        console.warn('[FirebaseBridge] listenDisposals error:', err);
+      });
+    activeListeners.push(unsub);
+    return unsub;
+  },
+
+  /**
+   * Saves or updates a PM / Calibration schedule in Firestore `pm_schedules`.
+   */
+  async savePmSchedule(schedule) {
+    if (!firestoreDb || !schedule) return false;
+    const id = schedule.id || `PM-${Date.now()}`;
+    try {
+      await firestoreDb.collection('pm_schedules').doc(id).set({
+        ...schedule,
+        id,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+      return true;
+    } catch (err) {
+      console.warn('[FirebaseBridge] savePmSchedule failed:', err);
+      return false;
+    }
+  },
+
+  /**
+   * Listens to PM / Calibration schedules in real time.
+   */
+  listenPmSchedules(callback) {
+    if (!firestoreDb) return () => {};
+    const unsub = firestoreDb.collection('pm_schedules')
+      .onSnapshot(snap => {
+        const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        callback(items);
+      }, err => {
+        console.warn('[FirebaseBridge] listenPmSchedules error:', err);
+      });
+    activeListeners.push(unsub);
+    return unsub;
   }
 };
 

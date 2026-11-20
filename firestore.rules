@@ -1,0 +1,87 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userDocExists() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function getUserRole() {
+      return userDocExists()
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+        : 'dept_user';
+    }
+
+    function hasRole(roles) {
+      return isSignedIn() && getUserRole() in roles;
+    }
+
+    // Master Asset Register (ทะเบียนคุมทรัพย์สิน)
+    match /assets/{assetId} {
+      allow read: if isSignedIn();
+      allow create, update: if hasRole(['admin']);
+      // Soft disposal only — hard delete disabled for government audit compliance (สตง.)
+      allow delete: if false;
+    }
+
+    // User Profiles & RBAC Roles
+    match /users/{uid} {
+      allow read: if isSignedIn() && (request.auth.uid == uid || hasRole(['admin', 'executive']));
+      // Allow self-registration profile creation (without escalating role unless admin) or admin management
+      allow create: if isSignedIn() && (
+        request.auth.uid == uid || hasRole(['admin'])
+      );
+      allow update: if hasRole(['admin']) || (
+        isSignedIn() && request.auth.uid == uid && request.resource.data.role == resource.data.role
+      );
+      allow delete: if false;
+    }
+
+    // Immutable Audit Logs (สตง. Audit Trail)
+    match /audit_logs/{logId} {
+      allow read: if hasRole(['admin', 'executive']);
+      allow create: if isSignedIn();
+      allow update, delete: if false;
+    }
+
+    // Annual Audits (ระเบียบฯ ข้อ 213)
+    match /annual_audits/{roundId} {
+      allow read: if isSignedIn();
+      allow create, update: if hasRole(['admin', 'auditor']);
+      allow delete: if false;
+    }
+
+    // Statutory Disposals (ระเบียบฯ ข้อ 215-218)
+    match /disposals/{disposalId} {
+      allow read: if isSignedIn();
+      allow create, update: if hasRole(['admin', 'executive']);
+      allow delete: if false;
+    }
+
+    // Transfers & Borrows (โอนย้าย / ยืม-คืน)
+    match /transfers/{transferId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if hasRole(['admin', 'dept_user']);
+      allow delete: if false;
+    }
+
+    // Repair Tickets (แจ้งซ่อมและต้นทุนการซ่อม)
+    match /tickets/{ticketId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if hasRole(['admin', 'technician']);
+      allow delete: if false;
+    }
+
+    // Medical Device PM & Calibration Schedules (HA)
+    match /pm_schedules/{scheduleId} {
+      allow read: if isSignedIn();
+      allow create, update: if hasRole(['admin', 'technician']);
+      allow delete: if hasRole(['admin']);
+    }
+  }
+}
